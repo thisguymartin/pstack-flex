@@ -3,6 +3,7 @@ import { buildAssets } from "./assets.ts";
 import { DEFAULT_PORT, serve, start, status, stop, type Io } from "./daemon.ts";
 import { diagnose, renderReport } from "./doctor.ts";
 import type { Harness } from "./domain.ts";
+import { journalEnabled, journalOff, journalOn } from "./journal.ts";
 import { homes, type Homes } from "./sources.ts";
 
 // pstack-flex addition. Entry point for `pstack-monitor`.
@@ -16,6 +17,9 @@ Commands:
   stop      Stop the running monitor.
   doctor    Index recent transcripts headlessly and report how well each
             source parsed. Prints counts, never content.
+  journal <on|off|status>
+            Record external pstack lanes so the monitor can show them live.
+            \`start\` turns this on; \`off\` stops it and deletes the records.
   serve     Run the server in the foreground (what \`start\` launches).
 
 Options:
@@ -36,11 +40,14 @@ const defaultIo: Io = {
 
 class UsageError extends Error {}
 
-const COMMANDS = ["start", "status", "stop", "doctor", "serve"] as const;
+const COMMANDS = ["start", "status", "stop", "doctor", "journal", "serve"] as const;
 type Command = (typeof COMMANDS)[number];
+const JOURNAL_ACTIONS = ["on", "off", "status"] as const;
+type JournalAction = (typeof JOURNAL_ACTIONS)[number];
 
 export interface Options {
   readonly command: Command | "help";
+  readonly journal: JournalAction;
   readonly port: number;
   readonly hours: number;
   readonly harness: Harness | null;
@@ -91,10 +98,32 @@ export function parseArgs(argv: readonly string[], env: NodeJS.ProcessEnv = proc
   const session = focusValue ?? currentSession(harness, env);
   const focus = session === null || harness === null || session.includes(":") ? session : `${harness}:${session}`;
   if (parsed.values.help === true || command === undefined || command === "help") {
-    return { command: "help", port, hours, harness, focus };
+    return { command: "help", journal: "status", port, hours, harness, focus };
   }
   if (!(COMMANDS as readonly string[]).includes(command)) throw new UsageError(`unknown command: ${command}`);
-  return { command: command as Command, port, hours, harness, focus };
+  const action = parsed.positionals[1] ?? "status";
+  if (command === "journal" && !(JOURNAL_ACTIONS as readonly string[]).includes(action)) {
+    throw new UsageError("journal takes on, off, or status");
+  }
+  return { command: command as Command, journal: action as JournalAction, port, hours, harness, focus };
+}
+
+function journal(where: Homes, action: JournalAction, io: Io): number {
+  switch (action) {
+    case "on":
+      io.stdout(journalOn(where.lanes) === "enabled"
+        ? `lane journal on: external lanes are recorded in ${where.lanes} and kept 7 days\n`
+        : `lane journal is already on (${where.lanes})\n`);
+      return 0;
+    case "off":
+      io.stdout(journalOff(where.lanes) === "disabled"
+        ? `lane journal off: deleted ${where.lanes}\n`
+        : "lane journal is already off\n");
+      return 0;
+    case "status":
+      io.stdout(journalEnabled(where.lanes) ? `lane journal on (${where.lanes})\n` : "lane journal off\n");
+      return 0;
+  }
 }
 
 export async function main(
@@ -119,6 +148,8 @@ export async function main(
       return status(where, io);
     case "stop":
       return stop(where, io);
+    case "journal":
+      return journal(where, options.journal, io);
     case "serve":
       return serve(where, { port: options.port, windowHours: options.hours, assets: buildAssets }, io);
     case "doctor": {

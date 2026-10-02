@@ -15,13 +15,17 @@ import {
 
 const HELP = `Usage: pstack-runner --parent <claude|codex> --provider <${PROVIDERS.join("|")}> \\
   --model <slug> --effort <level> --mode <read-only|isolated-write> \\
-  --prompt <file> --cwd <dir> --output <file> --receipt <file> [--timeout <seconds>]
+  --prompt <file> --cwd <dir> --output <file> --receipt <file> [--timeout <seconds>] \\
+  [--label <name>]
 
 Runs exactly one external model lane. Same-provider calls are rejected; use the
 parent harness's native subagent primitive for those lanes. Output and receipt
 paths must not already exist. There is no implicit timeout. Pass --timeout only
 when the user or task supplies a real deadline; it is one end-to-end launcher
 deadline shared by setup, preflight, and model execution.
+
+--label names the lane in the agent monitor (for example "arena cross-judge").
+It is display text only and changes nothing about how the lane runs.
 `;
 
 interface Io {
@@ -74,6 +78,7 @@ export function parseArgs(argv: readonly string[]): RunnerOptions | null {
         output: { type: "string" },
         receipt: { type: "string" },
         timeout: { type: "string" },
+        label: { type: "string" },
         help: { type: "boolean", short: "h", default: false },
       },
     });
@@ -86,6 +91,8 @@ export function parseArgs(argv: readonly string[]): RunnerOptions | null {
     stringValue(parsed.values.mode),
     ACCESS_MODES
   ) as AccessMode;
+  const labelValue = stringValue(parsed.values.label)?.trim();
+  const label = labelValue === undefined || labelValue.length === 0 ? undefined : labelValue.slice(0, 120);
   const timeoutValue = stringValue(parsed.values.timeout);
   const timeoutSeconds = timeoutValue === undefined ? null : Number(timeoutValue);
   if (
@@ -105,6 +112,7 @@ export function parseArgs(argv: readonly string[]): RunnerOptions | null {
     outputPath: required("output", stringValue(parsed.values.output)),
     receiptPath: required("receipt", stringValue(parsed.values.receipt)),
     timeoutMs: timeoutSeconds === null ? null : timeoutSeconds * 1_000,
+    ...(label === undefined ? {} : { label }),
   });
 }
 

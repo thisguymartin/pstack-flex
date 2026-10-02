@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentNode, Harness } from "./domain.ts";
 import { diskFileSystem } from "./fs.ts";
+import { journalOn, pruneLanes } from "./journal.ts";
 import { Monitor } from "./monitor.ts";
 import { psTable } from "./probe.ts";
 import { clearRecord, readRecord, serverUrl, writeRecord, type ServerRecord } from "./record.ts";
@@ -87,6 +88,8 @@ function logTail(path: string): string {
 
 /** Runs the server in the foreground until SIGINT or SIGTERM. */
 export async function serve(where: Homes, options: ServeOptions, io: Io): Promise<number> {
+  const pruned = pruneLanes(where.lanes, Date.now());
+  if (pruned > 0) io.stdout(`removed ${pruned} lane ${pruned === 1 ? "journal" : "journals"} older than 7 days\n`);
   const version = monitorVersion();
   const instance = randomBytes(8).toString("hex");
   const token = randomBytes(24).toString("base64url");
@@ -129,6 +132,13 @@ export async function serve(where: Homes, options: ServeOptions, io: Io): Promis
 
 /** Starts the daemon, or reuses one that runs this exact build, and prints its link. */
 export async function start(where: Homes, options: StartOptions, io: Io): Promise<number> {
+  // Watching agents means wanting external lanes too; say so the first time, since lane output is kept on disk.
+  if (journalOn(where.lanes) === "enabled") {
+    io.stderr(
+      `lane journal on: external pstack lanes are recorded in ${where.lanes} and kept 7 days. ` +
+        "`pstack-monitor journal off` stops it and deletes them.\n",
+    );
+  }
   const version = monitorVersion();
   const existing = readRecord(where.state);
   if (existing !== null) {

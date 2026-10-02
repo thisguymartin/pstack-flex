@@ -4,6 +4,7 @@
 
 - Add `/pstack:monitor` and `pstack-monitor`, a read-only local server with a live node canvas of the agents on this machine: Claude Code and Codex sessions, the subagents they spawn, and each agent's model. Any agent opens into a panel that streams its prompts, replies, thinking, and tool calls. The theme follows the session's harness: warm for Claude Code, blue for Codex.
 - The monitor reads the transcripts each harness already writes and adds no hook, so it costs nothing in sessions that never open it. Status comes from process records, lifecycle events, and parent tool results, never file times; what cannot be known shows as unknown. Unrecognized transcript records are counted and surfaced instead of dropped, and `pstack-monitor doctor` reports them without printing content.
+- External lanes become visible while they run. `pstack-runner` writes an opt-in journal (start record, stdout as it arrives, receipt copy) under `~/.pstack-flex/lanes/` whenever that directory exists; `pstack-monitor start` creates it and `pstack-monitor journal off` deletes it. The new `--label` flag names a lane by its role, such as `arena cross-judge`, and routes nothing. A journal failure never changes a lane's receipt, exit status, or output.
 - The server binds `127.0.0.1`, accepts no writes, rejects foreign `Host` and `Origin` headers, and requires a per-start token. It runs until `pstack-monitor stop`. Tracked in [pstack-flex #23](https://github.com/thisguymartin/pstack-flex/issues/23).
 
 ## Unreleased: merge open-pstack 1.5.0 (Cursor pstack 0.15.5)
