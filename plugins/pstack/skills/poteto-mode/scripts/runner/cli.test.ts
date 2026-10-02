@@ -55,6 +55,13 @@ describe("runner CLI parsing", () => {
     expect(parsed?.model).toBe("MiniMax-M3");
   });
 
+  it("takes an optional display label and nothing else from it", () => {
+    expect(parseArgs(argv())?.label).toBeUndefined();
+    expect(parseArgs(argv(["--label", "  arena cross-judge  "]))?.label).toBe("arena cross-judge");
+    expect(parseArgs(argv(["--label", "   "]))?.label).toBeUndefined();
+    expect(parseArgs(argv(["--label", "x".repeat(500)]))?.label).toHaveLength(120);
+  });
+
   it("names the gateway providers in the provider rejection", () => {
     expect(() =>
       parseArgs(

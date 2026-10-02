@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -235,6 +236,8 @@ beforeEach(() => {
   for (const name of ["claude", "codex", "grok"]) makeExecutable(name);
   previousPath = process.env.PATH;
   process.env.PATH = `${bin}:${dirname(process.execPath)}:${previousPath ?? ""}`;
+  // A lanes directory that does not exist keeps the pstack-flex journal off.
+  process.env.PSTACK_FLEX_LANES_DIR = join(scratch, "no-lanes");
   delete process.env.FAKE_TIMEOUT;
   delete process.env.FAKE_INVALID_MODEL;
   delete process.env.FAKE_CANCEL;
@@ -259,6 +262,7 @@ beforeEach(() => {
 
 afterEach(() => {
   process.env.PATH = previousPath;
+  delete process.env.PSTACK_FLEX_LANES_DIR;
   delete process.env.FAKE_TIMEOUT;
   delete process.env.FAKE_INVALID_MODEL;
   delete process.env.FAKE_CANCEL;
@@ -914,6 +918,89 @@ describe("runLane", () => {
     );
     expect(existsSync(input.outputPath)).toBe(false);
     expect(existsSync(input.receiptPath)).toBe(false);
+  });
+});
+
+describe("pstack-flex lane journal", () => {
+  let previousSession: string | undefined;
+
+  beforeEach(() => {
+    previousSession = process.env.CLAUDE_CODE_SESSION_ID;
+    process.env.CLAUDE_CODE_SESSION_ID = "parent-session";
+  });
+
+  afterEach(() => {
+    if (previousSession === undefined) delete process.env.CLAUDE_CODE_SESSION_ID;
+    else process.env.CLAUDE_CODE_SESSION_ID = previousSession;
+  });
+
+  function enableJournal(): string {
+    const root = join(scratch, "lanes");
+    mkdirSync(root);
+    process.env.PSTACK_FLEX_LANES_DIR = root;
+    return root;
+  }
+
+  function onlyLane(root: string): string {
+    const entries = readdirSync(root);
+    expect(entries).toHaveLength(1);
+    return join(root, entries[0]!);
+  }
+
+  it("stays off while the lanes directory does not exist", async () => {
+    const result = await runLane(options("codex"));
+    expect(result.exitCode).toBe(0);
+    expect(existsSync(join(scratch, "no-lanes"))).toBe(false);
+  });
+
+  it("records the lane, its stdout as it arrives, and the receipt the caller gets", async () => {
+    const root = enableJournal();
+    const input = { ...options("codex"), label: "arena cross-judge" };
+    const result = await runLane(input);
+    expect(result.exitCode).toBe(0);
+    const dir = onlyLane(root);
+    expect(JSON.parse(readFileSync(join(dir, "lane.json"), "utf8"))).toMatchObject({
+      schemaVersion: 1,
+      parent: "claude",
+      parentSessionId: "parent-session",
+      provider: "codex",
+      model: "gpt-5.6-sol",
+      label: "arena cross-judge",
+      runnerPid: process.pid,
+    });
+    const events = readFileSync(join(dir, "stream.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => (JSON.parse(line) as { type: string }).type);
+    expect(events).toEqual(["thread.started", "item.completed", "turn.completed"]);
+    expect(JSON.parse(readFileSync(join(dir, "receipt.json"), "utf8"))).toEqual(receipt(input.receiptPath));
+    expect(statSync(dir).mode & 0o777).toBe(0o700);
+    expect(statSync(join(dir, "stream.jsonl")).mode & 0o777).toBe(0o600);
+  });
+
+  it("copies a failed lane's receipt unchanged", async () => {
+    const root = enableJournal();
+    process.env.FAKE_INVALID_MODEL = "1";
+    const input = options("codex");
+    const result = await runLane(input);
+    expect(result.exitCode).toBe(69);
+    const journaled = JSON.parse(readFileSync(join(onlyLane(root), "receipt.json"), "utf8")) as RunnerReceipt;
+    expect(journaled).toEqual(receipt(input.receiptPath));
+    expect(journaled.status).toBe("unavailable-model");
+  });
+
+  it("runs the lane unchanged when the journal cannot be written", async () => {
+    const root = enableJournal();
+    chmodSync(root, 0o500);
+    try {
+      const input = options("codex");
+      const result = await runLane(input);
+      expect(result.exitCode).toBe(0);
+      expect(receipt(input.receiptPath).status).toBe("complete");
+      expect(readdirSync(root)).toEqual([]);
+    } finally {
+      chmodSync(root, 0o700);
+    }
   });
 });
 

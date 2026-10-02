@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { invocationCommand, preflightCommand, type CommandSpec } from "./commands.ts";
+import { openLaneJournal, type LaneTap } from "./flex-journal.ts";
 import {
   GATEWAY_INHERITED_CONFLICTS,
   gatewayEnvironment,
@@ -186,7 +187,10 @@ interface StreamCapture {
   cancel(): Promise<void>;
 }
 
-function captureStream(stream: ReadableStream<Uint8Array>): StreamCapture {
+function captureStream(
+  stream: ReadableStream<Uint8Array>,
+  onChunk?: (chunk: Uint8Array) => void
+): StreamCapture {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let text = "";
@@ -197,6 +201,7 @@ function captureStream(stream: ReadableStream<Uint8Array>): StreamCapture {
       while (true) {
         const next = await reader.read();
         if (next.done) break;
+        onChunk?.(next.value);
         text += decoder.decode(next.value, { stream: true });
       }
       text += decoder.decode();
@@ -235,7 +240,8 @@ async function runProcess(
   env: NodeJS.ProcessEnv,
   prompt: string,
   deadlineAt: number | null,
-  cancellation: RunCancellation
+  cancellation: RunCancellation,
+  onStdout?: (chunk: Uint8Array) => void
 ): Promise<ProcessResult> {
   const child = Bun.spawn([executable, ...spec.args], {
     cwd,
@@ -245,7 +251,7 @@ async function runProcess(
     stderr: "pipe",
   });
   let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
-  const stdoutCapture = captureStream(child.stdout);
+  const stdoutCapture = captureStream(child.stdout, onStdout);
   const stderrCapture = captureStream(child.stderr);
   const streams = Promise.all([stdoutCapture.result, stderrCapture.result]);
   const exited = child.exited.then((exitCode): ProcessEvent => ({
@@ -564,7 +570,8 @@ async function executeLane(
   deadlineAt: number | null,
   invocation: CommandSpec,
   preflight: CommandSpec,
-  progress: LaneProgress
+  progress: LaneProgress,
+  tap: LaneTap
 ): Promise<RunResult> {
   const startedAt = new Date(started).toISOString();
   const prompt = readFileSync(options.promptPath, "utf8");
@@ -816,7 +823,8 @@ async function executeLane(
     env,
     prompt,
     deadlineAt,
-    cancellation
+    cancellation,
+    tap.stdout
   );
   const completed = Date.now();
   const base = {
@@ -933,16 +941,20 @@ export async function runLane(
   const cancellation = installRunCancellation();
   try {
     reserveOutputs(options);
+    const tap = openLaneJournal(options, started);
     try {
-      return await executeLane(
+      const result = await executeLane(
         options,
         cancellation,
         started,
         deadlineAt,
         invocation,
         preflight,
-        progress
+        progress,
+        tap
       );
+      tap.finish(result.receipt);
+      return result;
     } catch (error) {
       const completed = Date.now();
       const signal = cancellation.signal;
@@ -982,6 +994,7 @@ export async function runLane(
       });
       removeIfExists(options.outputPath);
       writeReceipt(options.receiptPath, receipt);
+      tap.finish(receipt);
       return { exitCode: statusExitCode(status), receipt };
     }
   } finally {

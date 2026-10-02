@@ -59,9 +59,9 @@ The marketplace install is the normal user path. Direct links are only for testi
 ├── plugins/pstack/                   # the plugin itself
 │   ├── .claude-plugin/plugin.json    # Claude Code manifest
 │   ├── .codex-plugin/plugin.json     # Codex manifest (skills: ./skills/)
-│   ├── skills/                       # 54 skills shared by Claude Code and Codex
+│   ├── skills/                       # 55 skills shared by Claude Code and Codex
 │   │   ├── poteto-mode/references/{codex-tools,provider-dispatch}.md  # tool + provider routing
-│   │   └── poteto-mode/scripts/      # bun/bash/node tooling: watch-pr, orch, runner, check-plan.mjs, worktree-audit.sh
+│   │   └── poteto-mode/scripts/      # bun/bash/node tooling: watch-pr, orch, runner, monitor, check-plan.mjs, worktree-audit.sh
 │   ├── hooks/                        # SessionStart opt-in gate: pstack runs only on request (Claude Code and Codex)
 │   └── agents/                       # Claude subagents, including native Fable and Opus lanes at each selectable effort
 ├── tests/skill-collision-repro.sh    # native-skill package invariants and Claude invocation checks
@@ -151,6 +151,19 @@ The table uses the short upstream names. Claude Code exposes each native skill w
 | `/fix-merge-conflicts` | non-interactively resolve merge conflicts, validate, finalize |
 | `/get-pr-comments` | fetch and summarize review comments from the active PR |
 | `/what-did-i-get-done` | summarize authored commits over a user-chosen period |
+| `/monitor` | open a live local view of running agents, their spawn tree, and each agent's activity (pstack-flex) |
+
+## Agent monitor
+
+`/monitor` starts `skills/poteto-mode/scripts/monitor/pstack-monitor`, a read-only server on `127.0.0.1` (default port 47317), and prints a link that carries a per-start access token. The page draws the selected session's agents as a node canvas, themed by the session's harness, and streams any agent's timeline in a side panel.
+
+- **Sources.** It reads what each harness already writes: Claude Code session transcripts, subagent transcripts and their `.meta.json` sidecars, and `~/.claude/sessions/<pid>.json` process records; Codex rollouts under `~/.codex/sessions/`, where a child thread names its parent. It adds no hook and changes no harness setting. `CLAUDE_CONFIG_DIR` and `CODEX_HOME` move the sources; `PSTACK_FLEX_MONITOR_DIR` moves the server record and log.
+- **Status comes from evidence, never file times.** A Claude Code terminal session is live while its process record names a running process with the recorded start time. A subagent finishes on its parent's tool result or background-task notification. A Codex thread is in a turn between `task_started` and `task_complete` or `turn_aborted`. Claude Desktop and SDK sessions keep no process record, so their status shows as unknown rather than guessed.
+- **External lanes.** `pstack-runner` keeps a lane's output in memory until it exits, so the runner also writes an opt-in journal: one directory per lane under `~/.pstack-flex/lanes/` (or `PSTACK_FLEX_LANES_DIR`) with `lane.json` (provider, model, effort, label, runner pid, parent session), `stream.jsonl` (the CLI's stdout as it arrives), and `receipt.json` (a copy of the receipt). The journal is on only while that directory exists: `pstack-monitor start` creates it, `pstack-monitor journal off` deletes it with everything recorded, and the server prunes lanes older than 7 days. A lane hangs under the session that launched it, read from that harness's own session variable. Codex and Grok lanes stream; Claude, DeepSeek, and MiniMax lanes print one result when they exit. A journal failure never changes a lane's receipt, exit status, or output.
+- **Messages between agents.** Dashed, arrowed arcs show who messaged whom, with a count; each new message sends a spark along its arc, and an agent's panel totals what it sent and received. Codex records each message once, in the recipient's rollout, addressed by agent path (`/root`, `/root/<agent>`), and the monitor resolves the path within that tree. Claude Code messages come from `SendMessage` calls, addressed by agent id, name, or `main`. A message to another session's socket is left off the canvas, since that session is drawn separately.
+- **Format drift is visible.** These transcript formats are undocumented. Unrecognized record types and malformed records are counted per source; the page shows a banner and `pstack-monitor doctor` prints the counts, record types, and CLI versions, never content.
+- **Lifecycle.** `start` reuses a running server of the same build and replaces one from another build. `status`, `stop`, `doctor`, and `journal on|off|status` complete the CLI. Nothing times the server out.
+- **Security.** The server binds loopback only, rejects foreign `Host` and `Origin` headers, accepts no writes, and requires the token (exchanged for an `HttpOnly`, `SameSite=Strict` cookie) on every route except a health check that reveals no data. The page runs under a same-origin content security policy and renders transcript text only as text.
 
 ## Subagents
 

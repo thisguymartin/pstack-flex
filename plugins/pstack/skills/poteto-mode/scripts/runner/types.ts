@@ -28,6 +28,8 @@ export interface RunnerOptions {
   readonly outputPath: string;
   readonly receiptPath: string;
   readonly timeoutMs: number | null;
+  // pstack-flex: display name for the agent monitor, such as `arena cross-judge`. Never routes.
+  readonly label?: string;
 }
 
 export type ReceiptStatus =
