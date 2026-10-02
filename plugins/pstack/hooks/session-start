@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# SessionStart hook for the pstack plugin: prints the poteto-mode dispatch
-# mandate to stdout, which Claude Code injects as session context directly.
+# SessionStart hook for the pstack plugin: prints the opt-in gate to stdout,
+# which Claude Code injects as session context directly.
 # A missing context file fails the hook cleanly instead of injecting noise.
 
 set -euo pipefail

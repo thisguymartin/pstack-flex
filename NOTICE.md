@@ -56,7 +56,7 @@ Files authored for this port (not derived from upstream):
 - `plugins/pstack/skills/poteto-mode/scripts/check-plan.test.ts`
 - `plugins/pstack/skills/babysit/SKILL.md` (independently authored; workflow informed by Cursor's public `/babysit` behavior)
 - `plugins/pstack/agents/pstack-fable-*.md` and `plugins/pstack/agents/pstack-opus-*.md` (Claude-native frontier lanes at each selectable effort)
-- `plugins/pstack/hooks/hooks.json`, `plugins/pstack/hooks/session-start`, and `plugins/pstack/hooks/session-start-context.md` (the auto-fire hook and its mandate)
+- `plugins/pstack/hooks/hooks.json`, `plugins/pstack/hooks/session-start`, and `plugins/pstack/hooks/session-start-context.md` (the SessionStart hook and its opt-in gate)
 - `NOTICE.md` (this file)
 - `README.md`
 - `CHANGES.md`

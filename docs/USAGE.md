@@ -116,7 +116,7 @@ Two labs are two distinct families, so panels keep real diversity without any ov
 
 ## Daily driving: the skills, with examples
 
-**poteto-mode** — the default entry point for any real task. It stays sticky across turns and pairs well with long autonomous sessions.
+**poteto-mode** — the default entry point for any real task. pstack runs only when you ask for it, so start it by name. Once started, it stays sticky across turns and pairs well with long autonomous sessions.
 
 ```text
 /pstack:poteto-mode
