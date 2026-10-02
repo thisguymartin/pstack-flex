@@ -14,6 +14,16 @@ pstack-flex layers on top of open-pstack's own upstream tracking. Two sync relat
 | Commit | `de67e6b40511814171e5e4c8ad7af3b79f07c9ee` |
 | Tracks Cursor pstack | `0.15.1` (`f8abedd`) |
 
+## Last merge
+
+| Source | Value |
+| --- | --- |
+| Tag | `v1.5.0` |
+| Commit | `77a91fd6f75483b971fa5cca4a88f1337f6099dd` |
+| Tracks Cursor pstack | `0.15.5` (`12d587d`) |
+
+Not merged: open-pstack's `docs/plans/2026-10-01-triage-and-roadmap.md`, which plans open-pstack's own issue queue. Later upstream edits to that file come back as modify/delete conflicts; resolve them by deleting the file.
+
 The fork keeps full upstream history. The `upstream` remote points at ericlitman/open-pstack.
 
 ## What the fork owns
@@ -41,8 +51,8 @@ git merge --no-ff --no-commit upstream/main
 
 Expected conflict surface on future upstream releases:
 
-- `plugins/pstack/skills/setup-pstack/SKILL.md` — upstream issue #88 (1.5.0, syncing Cursor pstack 0.15.5) folds upstream PR #73, which moves setup to the same assignment-first, probe-only-assigned shape this fork already uses. Resolve toward upstream's wording wherever it covers the same rule; keep the flex families and the diversity rule.
-- `plugins/pstack/skills/poteto-mode/scripts/runner/model-matrix.test.ts` — upstream 1.5.0 changes the stock panel to three lanes. Take upstream's stock assertions verbatim; the flex-matrix describe block is fork-owned and should survive as-is.
+- `plugins/pstack/skills/setup-pstack/SKILL.md` — since 1.5.0 the fork uses upstream's step layout (role question in step 2, efforts in step 4). Take upstream's wording; keep the flex families, the GPT-6 guidance, the panel-diversity rule, and the fork's first-run sheet.
+- `plugins/pstack/skills/poteto-mode/scripts/runner/model-matrix.test.ts` and `tests/skill-collision-repro.sh` — upstream reads its three-lane panel from the setup sheet; the fork reads its four-lane panel from the "Default panel" line. Take upstream's structural changes; keep the fork's panel source, GPT-6 rows, and flex-matrix checks.
 - `plugins/pstack/hooks/session-start-context.md` — keep the fork's opt-in gate. If upstream changes its mandate, port only edits that still make sense for an opt-in gate, such as a renamed entry skill.
 - `plugins/pstack/skills/poteto-mode/references/provider-dispatch.md` — the four upstream rows and their prose are upstream's; the GPT-6 rows, the "Default panel" section, and the flex section are fork-owned. Upstream's own panel changes land in the "Default panel" line only if the fork wants them.
 

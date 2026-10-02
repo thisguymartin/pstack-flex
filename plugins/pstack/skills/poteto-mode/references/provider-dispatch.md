@@ -10,10 +10,10 @@ pstack model choices are provider-qualified descriptors:
 
 | Family | Upstream pstack choice | Provider | Model | Default effort | Selectable efforts | Claude-native agent stem |
 |---|---|---|---|---|---|---|
-| fable | fable | claude | fable | max | low medium high xhigh max | fable |
+| fable | - | claude | fable | max | low medium high xhigh max | fable |
 | sol | gpt-5.6-sol-max | codex | gpt-5.6-sol | max | low medium high xhigh max | - |
-| grok | grok-4.6-fast-xhigh | grok | grok-4.6 | xhigh | low medium high xhigh max | - |
-| opus | opus | claude | opus | xhigh | low medium high xhigh max | opus |
+| grok | grok-4.7-xhigh-fast | grok | grok-4.7 | xhigh | low medium high xhigh max | - |
+| opus | opus | claude | opus | max | low medium high xhigh max | opus |
 | astra | - | codex | gpt-6-astra | high | low medium high xhigh max | - |
 | sol-6 | - | codex | gpt-6-sol | high | low medium high xhigh max | - |
 | luna | - | codex | gpt-6-luna | high | low medium high xhigh max | - |
@@ -28,7 +28,7 @@ The `astra`, `sol-6`, and `luna` rows are the GPT-6 Codex families (pstack-flex 
 
 The first-run panel roles (`arena runners`, `arena cross-judge pool`, `architect runners`, `interrogate reviewers`) use these four lanes, one per entry, at each family's default effort:
 
-`claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.6@xhigh, claude:opus@xhigh`
+`claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max`
 
 This line is the single source for the panel default. `setup-pstack`'s first-run sheet and the `arena`, `architect`, and `interrogate` skills copy it verbatim; the static invariant check fails when they drift. Solo code-writing roles (`feature, refactoring`, `bug-fix`, `perf-issue`, `hillclimb`) default to the `sol-6` row; exploration and swarm roles default to the `luna` row.
 
@@ -59,7 +59,7 @@ Normalize configured descriptors before matching them to the matrix or choosing 
 
 This read-time rule makes an older installed sheet use the latest family revision immediately without writing user files. Once per parent run, report that the persisted sheet is stale and that `/setup-pstack` will rewrite it after its normal probes and confirmation. Unknown versioned Claude models remain invalid. The external runner rejects a missed Fable or Opus version pin instead of silently executing it.
 
-`fast` is part of Cursor's Grok selector, not a Grok Build CLI model or effort flag. The portable Grok route pins the current CLI model `grok-4.6`. The first-run Grok effort is `xhigh`.
+`fast` is part of Cursor's Grok selector, not a Grok Build CLI model or effort flag. The portable Grok route pins the current CLI model `grok-4.7`. The first-run Grok effort is `xhigh`.
 
 ## The parent owns the route
 

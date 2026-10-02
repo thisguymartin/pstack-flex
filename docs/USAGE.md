@@ -20,7 +20,7 @@ flowchart TD
     S --> F{Lane fan-out}
     F --> N1["claude:fable / claude:opus<br/>native Agent (Claude sub)"]
     F --> N2["codex:gpt-6-astra / gpt-6-sol / gpt-6-luna<br/>native or codex CLI (ChatGPT sub)"]
-    F --> N3["grok:grok-4.6<br/>grok CLI (Grok sub)"]
+    F --> N3["grok:grok-4.7<br/>grok CLI (Grok sub)"]
     F --> G1["deepseek:deepseek-flash<br/>runner + env -> DeepSeek API (key)"]
     F --> G2["minimax:MiniMax-M3<br/>runner + env -> MiniMax API (key)"]
     N1 --> R[Outputs + receipts]
@@ -90,7 +90,7 @@ feature, refactoring: codex:gpt-6-sol@high
 bug-fix: codex:gpt-6-sol@high
 how explorer: codex:gpt-6-luna@high
 swarm workers: codex:gpt-6-luna@high
-arena runners: claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.6@xhigh, claude:opus@xhigh
+arena runners: claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max
 ```
 
 **B. Hybrid saver** (Claude sub + two API keys) — frontier judgment, cheap volume:

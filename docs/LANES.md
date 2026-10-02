@@ -8,7 +8,7 @@ Prices and endpoints below were verified 2026-09-25 and drift. Re-verify against
 
 | Kind | Lanes | Auth | Billing | Route |
 | --- | --- | --- | --- | --- |
-| Subscription | `claude:fable`, `claude:opus`, `codex:gpt-6-astra`, `codex:gpt-6-sol`, `codex:gpt-6-luna`, `codex:gpt-5.6-sol`, `grok:grok-4.6` | each CLI's own login | that CLI's plan | native or external per the route table |
+| Subscription | `claude:fable`, `claude:opus`, `codex:gpt-6-astra`, `codex:gpt-6-sol`, `codex:gpt-6-luna`, `codex:gpt-5.6-sol`, `grok:grok-4.7` | each CLI's own login | that CLI's plan | native or external per the route table |
 | Gateway (flex) | DeepSeek Flash / V4 Pro; MiniMax M3 / M3.1 Flash Preview | API key in the environment | provider billing; preview requires Token Plan | always the external runner |
 
 A gateway lane is the stock `claude` binary env-pointed at the lab's Anthropic-compatible endpoint. There is no custom agent loop and no separate harness: the same runner that spawns Codex and Grok lanes spawns gateway lanes with injected environment. Both labs document this Claude Code setup themselves (DeepSeek: `deepseek-ai/awesome-deepseek-agent`, `docs/claude_code.md`; MiniMax: platform.minimax.io, Claude Code guide).

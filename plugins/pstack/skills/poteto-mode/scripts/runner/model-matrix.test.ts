@@ -61,8 +61,8 @@ const SHEET_ROLES = [
 const SETUP_SECTION_ORDER = [
   "### 2. Load current state",
   "### 3. Parse per-family efforts",
-  "### 4. Choose role assignments, then collect efforts",
-  "### 5. Probe the assigned pairs",
+  "### 4. Collect one requested effort per family",
+  "### 5. Probe the requested pairs",
   "### 6. Render, preserving role families",
   "### 7. Confirm and commit",
 ] as const;
@@ -259,7 +259,7 @@ describe("model matrix", () => {
       ["fable", "max"],
       ["sol", "max"],
       ["grok", "xhigh"],
-      ["opus", "xhigh"],
+      ["opus", "max"],
       ["astra", "high"],
       ["sol-6", "high"],
       ["luna", "high"],
@@ -375,8 +375,8 @@ describe("model matrix", () => {
     expect(panel).toEqual([
       "claude:fable@max",
       "codex:gpt-6-astra@high",
-      "grok:grok-4.6@xhigh",
-      "claude:opus@xhigh",
+      "grok:grok-4.7@xhigh",
+      "claude:opus@max",
     ]);
     const byDescriptor = new Set(rows.map(defaultDescriptor));
     for (const descriptor of panel) {
@@ -459,7 +459,7 @@ describe("model matrix", () => {
     expect(setup).toContain("Do not invent a precedence rule.");
     expect(setup).toContain("Do not probe or write while any inconsistency is unresolved.");
     expect(setup).toContain("A failed probe writes nothing:");
-    expect(setup).toContain("Run one probe per assigned family");
+    expect(setup).toContain("Run one probe per family");
     expect(setup).toContain("There is no requirement to assign every matrix family.");
     expect(setup).toContain("`architect runners` to keep at least two entries");
     expect(setup).toContain("span at least two distinct providers");

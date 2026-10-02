@@ -1,7 +1,7 @@
 # pstack-flex
 
 [![CI](https://github.com/thisguymartin/pstack-flex/actions/workflows/ci.yml/badge.svg)](https://github.com/thisguymartin/pstack-flex/actions/workflows/ci.yml)
-[![Fork of open-pstack v1.4.1](https://img.shields.io/badge/fork%20of-open--pstack%20v1.4.1-blue)](https://github.com/ericlitman/open-pstack/releases/tag/v1.4.1)
+[![Fork of open-pstack v1.5.0](https://img.shields.io/badge/fork%20of-open--pstack%20v1.5.0-blue)](https://github.com/ericlitman/open-pstack/releases/tag/v1.5.0)
 [![MIT license](https://img.shields.io/github/license/thisguymartin/pstack-flex)](LICENSE)
 
 **pstack-flex runs [Lauren Tan (@poteto)](https://x.com/poteto)'s [pstack](https://github.com/cursor/plugins/tree/main/pstack) in Claude Code and Codex on the models you actually have.** It is a fork of [ericlitman/open-pstack](https://github.com/ericlitman/open-pstack), which translates pstack's Cursor-specific parts for Claude Code and Codex. open-pstack assumes four frontier subscriptions. This fork keeps its skills and workflows and changes one thing: which models setup accepts and how they are reached.
@@ -37,18 +37,18 @@ Every pstack role (who writes code, who explores, who sits on a review panel) ma
 | Family | Descriptor at default effort | Needs | First-run role |
 | --- | --- | --- | --- |
 | `fable` | `claude:fable@max` | Claude Code login | judgment, prose, explanation, hardest tasks, panels |
-| `opus` | `claude:opus@xhigh` | Claude Code login | panels |
+| `opus` | `claude:opus@max` | Claude Code login | panels |
 | `astra` | `codex:gpt-6-astra@high` | Codex (ChatGPT) login | panels |
 | `sol-6` | `codex:gpt-6-sol@high` | Codex (ChatGPT) login | feature, refactoring, bug-fix, perf-issue, hillclimb |
 | `luna` | `codex:gpt-6-luna@high` | Codex (ChatGPT) login | how explorer, swarm workers |
 | `sol` | `codex:gpt-5.6-sol@max` | Codex (ChatGPT) login | none; selectable |
-| `grok` | `grok:grok-4.6@xhigh` | Grok CLI login | panels |
+| `grok` | `grok:grok-4.7@xhigh` | Grok CLI login | panels |
 | `deepseek` | `deepseek:deepseek-flash@high` | `DEEPSEEK_API_KEY` | none; selectable |
 | `deepseek-pro` | `deepseek:deepseek-v4-pro@high` | `DEEPSEEK_API_KEY` | none; selectable |
 | `minimax` | `minimax:MiniMax-M3@high` | `MINIMAX_API_KEY` | none; selectable |
 | `minimax-preview` | `minimax:MiniMax-M3.1-Flash-Preview@high` | `MINIMAX_API_KEY` (Token Plan) | none; selectable |
 
-The default review panel is `claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.6@xhigh, claude:opus@xhigh`: four lanes across three providers. Any family can take any role. Panels must span at least two providers, and two models from one provider count as one, because the adversarial signal comes from model diversity.
+The default review panel is `claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max`: four lanes across three providers. Any family can take any role. Panels must span at least two providers, and two models from one provider count as one, because the adversarial signal comes from model diversity.
 
 The DeepSeek and MiniMax lanes run the stock `claude` binary against the lab's Anthropic-compatible endpoint with that lab's key, in an isolated config directory, with inherited Anthropic routing stripped. A lane refuses to start if it finds a claude.ai login in that directory, so a subscription credential can never reach a third-party endpoint. Their receipts keep real token usage but set `costUsd` to null (Claude Code prices at Anthropic rates); the price table is in [docs/LANES.md](docs/LANES.md). Anthropic does not support pointing Claude Code at non-Anthropic endpoints; use synthetic data for gateway testing and keep keys in your local environment.
 
@@ -122,6 +122,8 @@ Setup is assignment-first. It shows the role map, asks which roles to change, as
 
 The sheet lives at `~/.claude/pstack-models.md` (Claude Code) or `~/.codex/pstack-models.md` (Codex). It is global, not per project. Change it by rerunning setup rather than editing it by hand, so every choice is probed before it is saved.
 
+A model sheet from an earlier release keeps its panel. To take the new defaults, delete those role lines and run setup again; setup fills missing roles from the defaults. A `grok:grok-4.6` entry keeps running until the next setup run asks you to replace it.
+
 ### 2. Use poteto-mode
 
 Start any task that needs careful engineering with `poteto-mode`.
@@ -180,7 +182,7 @@ Grok, DeepSeek, and MiniMax can take part in a multi-model review. You cannot us
 
 Lauren's [pstack guide](https://github.com/cursor/plugins/tree/main/pstack/docs/guide) walks through a real task, verification, and longer unattended runs. It uses Cursor's interface, but the ideas are the same. Use the translated skill invocations above in Claude Code or Codex.
 
-This repository tracks two upstreams. [UPSTREAM.md](UPSTREAM.md) records the Cursor pstack commit open-pstack imported (0.15.1 at [`f8abedd`](https://github.com/cursor/plugins/commit/f8abeddd1862dc73704e3d719dd73df0d51b8c71)) and how new pstack releases are brought over. [UPSTREAM-FLEX.md](UPSTREAM-FLEX.md) records the open-pstack fork point (v1.4.1), which files this fork owns, and the merge procedure. The fork keeps every upstream skill body as-is except the default model descriptors; its own changes are the model matrix, the first-run sheet, the gateway providers in the runner, setup's assignment-first flow, and the docs.
+This repository tracks two upstreams. [UPSTREAM.md](UPSTREAM.md) records the Cursor pstack commit open-pstack imported (0.15.5 at [`12d587d`](https://github.com/cursor/plugins/commit/12d587dfb20741cafc376c42c696c5f6e2a64487)) and how new pstack releases are brought over. [UPSTREAM-FLEX.md](UPSTREAM-FLEX.md) records the open-pstack fork point (v1.4.1), the last merged release (v1.5.0), which files this fork owns, and the merge procedure. The fork keeps every upstream skill body as-is except the default model descriptors; its own changes are the model matrix, the first-run sheet, the gateway providers in the runner, setup's assignment-first flow, and the docs.
 
 Also kept here: [the original README](README-UPSTREAM.md), unchanged; [the technical reference](docs/reference.md) for every skill and harness detail; [the change record](CHANGES.md); and [the attribution record](NOTICE.md).
 
