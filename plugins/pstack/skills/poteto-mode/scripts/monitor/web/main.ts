@@ -1,4 +1,4 @@
-import type { AgentId, AgentNode, Harness, SourceKind } from "../domain.ts";
+import type { AgentId, AgentNode, Harness, MessageLink, SourceKind } from "../domain.ts";
 import { compactNumber, shortPath } from "../format.ts";
 import { countsOf, isLive, rootOf, rootsOf, treeOf } from "../graph.ts";
 import type { Delta, ServerInfo, Snapshot, SourceHealth, TimelineAppend, TimelinePage } from "../wire.ts";
@@ -23,6 +23,7 @@ type Connection = "connecting" | "live" | "retrying" | "expired";
 
 interface State {
   nodes: Map<AgentId, AgentNode>;
+  links: readonly MessageLink[];
   health: readonly SourceHealth[];
   server: ServerInfo | null;
   session: AgentId | null;
@@ -37,6 +38,7 @@ let pendingFocus = params.get("focus") as AgentId | null;
 
 const state: State = {
   nodes: new Map(),
+  links: [],
   health: [],
   server: null,
   session: null,
@@ -131,6 +133,7 @@ async function fetchTimeline(agent: AgentId, before: number): Promise<TimelinePa
 
 function onSnapshot(snapshot: Snapshot): void {
   state.nodes = new Map(snapshot.agents.map((node) => [node.id, node]));
+  state.links = snapshot.links;
   state.health = snapshot.health;
   state.server = snapshot.server;
   if (state.session === null || !state.nodes.has(state.session)) state.session = chooseSession();
@@ -148,11 +151,20 @@ function onDelta(delta: Delta): void {
     }
     state.nodes.set(node.id, node);
   }
+  const talks: MessageLink[] = [];
+  if (delta.links !== null) {
+    const before = new Map(state.links.map((link) => [`${link.from}>${link.to}`, link.count]));
+    for (const link of delta.links) {
+      if (link.count > (before.get(`${link.from}>${link.to}`) ?? 0)) talks.push(link);
+    }
+    state.links = delta.links;
+  }
   if (delta.health !== null) state.health = delta.health;
   if (state.server !== null) state.server = { ...state.server, indexing: delta.indexing };
   if (state.session === null) state.session = chooseSession();
   render();
   for (const id of pulses) canvas.pulse(id);
+  for (const link of talks) canvas.pulseMessage(link.from, link.to);
 }
 
 function chooseSession(): AgentId | null {
@@ -228,7 +240,7 @@ function render(): void {
   rail.render(roots, descendants, state.session, now, `Showing the last ${hours === 24 ? "24 hours" : `${hours} hours`}`);
 
   const tree = state.session === null ? null : treeOf(state.session, state.nodes);
-  canvas.render(tree, state.agent, now);
+  canvas.render(tree, state.agent, now, state.links);
   document.documentElement.dataset.harness = tree?.root.harness ?? defaultHarness;
 
   if (state.connection === "expired") {
@@ -258,17 +270,22 @@ function render(): void {
     sessionPath.textContent = shortPath(tree.root.cwd);
     sessionPath.title = tree.root.cwd ?? "";
     const counts = countsOf(tree);
+    const members = new Set(tree.nodes.map((node) => node.id));
+    const messages = state.links
+      .filter((link) => members.has(link.from) && members.has(link.to))
+      .reduce((sum, link) => sum + link.count, 0);
     stats.replaceChildren(
       stat("running", counts.running, "running"),
       stat("spawned", counts.spawned, counts.spawned === 1 ? "agent" : "agents"),
       stat("done", counts.done, "done"),
       stat("failed", counts.failed, "failed"),
+      ...(messages > 0 ? [stat("messages", messages, messages === 1 ? "message" : "messages")] : []),
       stat("tokens", counts.tokens, "tokens", compactNumber(counts.tokens)),
     );
     document.title = counts.running > 0 ? `(${counts.running}) pstack monitor` : "pstack monitor";
   }
 
-  if (state.agent !== null) panel.update(state.nodes, now);
+  if (state.agent !== null) panel.update(state.nodes, now, state.links);
   renderBanner();
   renderLive();
 }

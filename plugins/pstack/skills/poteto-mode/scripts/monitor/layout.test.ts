@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { AgentId, AgentNode, AgentStatus } from "./domain.ts";
 import { countsOf, rootOf, rootsOf, treeOf } from "./graph.ts";
-import { CARD_HEIGHT, COLUMN_GAP, connector, layout, ROOT_HEIGHT, ROOT_WIDTH, SATELLITE_SPACE } from "./layout.ts";
+import { CARD_HEIGHT, COLUMN_GAP, connector, layout, messageArc, ROOT_HEIGHT, ROOT_WIDTH, SATELLITE_SPACE } from "./layout.ts";
 
 function node(id: string, parent: string | null, status: AgentStatus["kind"] = "done", startedAt = "2026-10-01T10:00:00Z"): AgentNode {
   const statuses: Record<AgentStatus["kind"], AgentStatus> = {
@@ -90,6 +90,18 @@ describe("layout", () => {
   it("keeps a lone root inside its bounds", () => {
     const tree = treeOf("root" as AgentId, index(node("root", null)))!;
     expect(layout(tree, () => true).bounds).toEqual({ x: 0, y: 0, width: ROOT_WIDTH, height: ROOT_HEIGHT + SATELLITE_SPACE });
+  });
+
+  it("draws a message between card edges, bowing opposite ways for each direction", () => {
+    const parent = { x: 0, y: 0, width: 100, height: 40 };
+    const child = { x: 300, y: 0, width: 100, height: 40 };
+    const down = messageArc(parent, child);
+    const up = messageArc(child, parent);
+    const start = down.d.split(" ").slice(1, 3).map(Number);
+    // The arc leaves from the parent's edge, not its center.
+    expect(start[0]! >= 0 && start[0]! <= 100 && (start[1] === 0 || start[0] === 100)).toBe(true);
+    expect(down.midY).toBeLessThan(20);
+    expect(up.midY).toBeGreaterThan(20);
   });
 
   it("draws connectors from output port to input port", () => {

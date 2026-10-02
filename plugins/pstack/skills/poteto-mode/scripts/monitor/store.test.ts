@@ -172,6 +172,80 @@ describe("usage", () => {
   });
 });
 
+describe("message links", () => {
+  const codexRoot = "codex:t-root" as AgentId;
+  const judge = "codex:t-judge" as AgentId;
+  const otherRoot = "codex:t-other" as AgentId;
+  const otherJudge = "codex:t-other-judge" as AgentId;
+  const codexAgent = (id: AgentId, path: string, parent: AgentId | null): Fact[] => [
+    {
+      kind: "agent",
+      id,
+      patch: {
+        harness: "codex",
+        source: "codex-rollout",
+        flavor: parent === null ? { kind: "session" } : { kind: "subagent", agentType: null },
+        agentPath: path,
+      },
+    },
+    ...(parent === null ? [] : [{ kind: "link", id, parent, via: "thread-spawn" } as Fact]),
+  ];
+  const codexMessage = (key: string, near: AgentId, from: string, to: string): Fact => ({
+    kind: "message",
+    key,
+    from: { kind: "codex-path", near, path: from },
+    to: { kind: "codex-path", near, path: to },
+    at: `2026-10-02T10:00:0${key.length % 10}Z`,
+  });
+
+  it("resolves Codex paths within each tree and counts each message once", () => {
+    const result = store(
+      ...codexAgent(codexRoot, "/root", null),
+      ...codexAgent(judge, "/root/judge", codexRoot),
+      ...codexAgent(otherRoot, "/root", null),
+      ...codexAgent(otherJudge, "/root/judge", otherRoot),
+      codexMessage("m1", judge, "/root", "/root/judge"),
+      codexMessage("m1", judge, "/root", "/root/judge"),
+      codexMessage("m2", judge, "/root", "/root/judge"),
+      codexMessage("m3", codexRoot, "/root/judge", "/root"),
+      codexMessage("m4", otherJudge, "/root/judge", "/root"),
+    );
+    const links = result.links().map(({ from, to, count }) => `${from} > ${to} × ${count}`);
+    expect(links.sort()).toEqual([
+      `${codexRoot} > ${judge} × 2`,
+      `${judge} > ${codexRoot} × 1`,
+      `${otherJudge} > ${otherRoot} × 1`,
+    ].sort());
+  });
+
+  it("resolves Claude targets by agent id, name, or main, and drops what it cannot place", () => {
+    const named: Fact = { kind: "agent", id: grandchild, patch: { harness: "claude", flavor: { kind: "subagent", agentType: null }, root, agentName: "researcher" } };
+    const send = (key: string, from: AgentId, target: string): Fact => ({
+      kind: "message",
+      key,
+      from: { kind: "agent", id: from },
+      to: { kind: "claude-target", session: root, target },
+      at: null,
+    });
+    const result = store(session, subagent, named, send("s1", root, "a1"), send("s2", root, "researcher"), send("s3", child, "main"), send("s4", root, "nobody"));
+    expect(result.links().map(({ from, to }) => `${from} > ${to}`).sort()).toEqual([
+      `${root} > ${child}`,
+      `${root} > ${grandchild}`,
+      `${child} > ${root}`,
+    ].sort());
+  });
+
+  it("sends links with a flush only when they change", () => {
+    const result = store(...codexAgent(codexRoot, "/root", null), ...codexAgent(judge, "/root/judge", codexRoot));
+    // No links yet; the snapshot already says so.
+    expect(result.flush()!.links).toBeNull();
+    result.apply({ kind: "activity", id: judge, activity: { what: "text", snippet: "x", at: null } });
+    expect(result.flush()!.links).toBeNull();
+    result.apply(codexMessage("m1", judge, "/root", "/root/judge"));
+    expect(result.flush()!.links).toHaveLength(1);
+  });
+});
+
 describe("flush", () => {
   it("sends only nodes that changed", () => {
     const result = store(session, subagent);

@@ -96,6 +96,31 @@ describe("rollout", () => {
     expect(prompt.facts[0]).toMatchObject({ patch: { titleHint: "Run the arena" } });
   });
 
+  it("records each agent message once, addressed by path, and names the tree's root path", () => {
+    const parser = adapter.open(rollout(childThread));
+    const meta = parser.line(childMeta(), 0);
+    expect(meta.facts[0]).toMatchObject({ patch: { agentPath: "/root/cross_judge" } });
+    const message = parser.line(record(1, "response_item", {
+      type: "agent_message",
+      id: "msg-1",
+      author: "/root",
+      recipient: "/root/cross_judge",
+      content: [{ type: "input_text", text: "Compare candidates 2 and 3." }],
+    }), 10);
+    expect(message.facts).toEqual([{
+      kind: "message",
+      key: "codex:msg-1",
+      from: { kind: "codex-path", near: `codex:${childThread}`, path: "/root" },
+      to: { kind: "codex-path", near: `codex:${childThread}`, path: "/root/cross_judge" },
+      at: "2026-10-01T10:00:00.000Z",
+    }] as never);
+    expect(message.items[0]).toMatchObject({ kind: "notice", text: "/root → /root/cross_judge: Compare candidates 2 and 3." });
+
+    const rootParser = adapter.open(rollout(parentThread));
+    const rootMeta = rootParser.line(record(0, "session_meta", { id: parentThread, cwd: "/repo", source: "cli" }), 0);
+    expect(rootMeta.facts[0]).toMatchObject({ patch: { agentPath: "/root" } });
+  });
+
   it("reports unknown record types instead of dropping them silently", () => {
     const parser = adapter.open(rollout(parentThread));
     const unknown = parser.line(record(1, "response_item", { type: "hologram" }), 7);

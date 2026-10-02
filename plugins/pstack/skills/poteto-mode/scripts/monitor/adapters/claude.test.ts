@@ -88,6 +88,21 @@ describe("session transcript", () => {
     expect(command.items[0]).toMatchObject({ kind: "notice", text: "ran /model" });
   });
 
+  it("turns SendMessage calls into messages, leaving other sessions' sockets out", () => {
+    const send = (to: string) => parser().line(line({
+      type: "assistant",
+      message: { id: "m9", content: [{ type: "tool_use", id: `call-${to.length}`, name: "SendMessage", input: { to, message: "status?" } }] },
+    }), 0);
+    expect(send("a1").facts).toContainEqual({
+      kind: "message",
+      key: "claude:call-2",
+      from: { kind: "agent", id: "claude:s1" },
+      to: { kind: "claude-target", session: "claude:s1", target: "a1" },
+      at: "2026-10-01T10:00:00.000Z",
+    } as never);
+    expect(send("uds:/tmp/cc-socks/1.sock").facts.some((fact) => fact.kind === "message")).toBe(false);
+  });
+
   it("takes the AI title as the session title", () => {
     const parsed = parser().line(JSON.stringify({ type: "ai-title", aiTitle: "Agent monitor", sessionId: "s1" }), 0);
     expect(parsed.facts).toEqual([{ kind: "agent", id: "claude:s1", patch: { title: "Agent monitor" } }] as never);

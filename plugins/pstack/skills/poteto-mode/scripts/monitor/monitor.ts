@@ -71,7 +71,13 @@ export class Monitor {
   }
 
   snapshot(): Snapshot {
-    return { rev: this.store.rev, agents: this.store.nodes(), health: this.index.health(), server: this.info() };
+    return {
+      rev: this.store.rev,
+      agents: this.store.nodes(),
+      links: this.store.links(),
+      health: this.index.health(),
+      server: this.info(),
+    };
   }
 
   health(): readonly SourceHealth[] {
@@ -140,6 +146,7 @@ export class Monitor {
       data: {
         rev: changes?.rev ?? this.store.rev,
         upserts: changes?.upserts ?? [],
+        links: changes?.links ?? null,
         health: healthChanged ? health : null,
         indexing: this.index.isIndexing,
       },

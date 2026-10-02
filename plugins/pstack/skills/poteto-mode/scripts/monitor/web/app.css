@@ -47,6 +47,8 @@
   --accent-wash: rgb(217 119 87 / 0.09);
   --on-accent: #1d120c;
   --wire: rgb(242 236 227 / 0.2);
+  --talk: rgb(232 214 186 / 0.5);
+  --talk-strong: #e9d6b8;
   color-scheme: dark;
 }
 
@@ -71,6 +73,8 @@
   --accent-wash: rgb(75 141 255 / 0.1);
   --on-accent: #06101f;
   --wire: rgb(214 226 244 / 0.2);
+  --talk: rgb(176 214 240 / 0.5);
+  --talk-strong: #b9dcf3;
 }
 
 [data-provider="claude"],
@@ -550,6 +554,39 @@ code {
   stroke-width: 2;
   animation: spark 0.85s ease-in forwards;
 }
+.spark-talk { stroke: var(--talk-strong); }
+
+/* Messages between agents: quieter than spawn wires, arrowed, and counted. */
+.talk {
+  fill: none;
+  stroke: var(--talk);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 5;
+  stroke-linecap: round;
+}
+.talk-arrow { fill: var(--talk-strong); }
+
+.talk-badge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  translate: -50% -50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--layer-2);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 6px 14px -8px rgb(0 0 0 / 0.8);
+  cursor: default;
+}
+.talk-badge .icon { width: 12px; height: 12px; color: var(--talk-strong); }
+.talk-badge.is-pulsing { animation: talk-pulse 0.7s var(--ease-out); }
 
 /* Cards */
 .card {
@@ -1254,6 +1291,11 @@ code {
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 var(--accent-glow), 0 14px 30px -16px rgb(0 0 0 / 0.7); }
   100% { box-shadow: 0 0 0 12px transparent, 0 14px 30px -16px rgb(0 0 0 / 0.7); }
+}
+
+@keyframes talk-pulse {
+  0% { box-shadow: 0 0 0 0 var(--talk), 0 6px 14px -8px rgb(0 0 0 / 0.8); }
+  100% { box-shadow: 0 0 0 8px transparent, 0 6px 14px -8px rgb(0 0 0 / 0.8); }
 }
 
 @keyframes spark {

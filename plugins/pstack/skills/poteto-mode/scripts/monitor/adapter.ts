@@ -18,6 +18,10 @@ export interface AgentPatch {
   readonly flavor?: Flavor;
   /** The session whose process decides this agent's liveness. Defaults to the agent itself. */
   readonly root?: AgentId;
+  /** Codex's address for the agent within its tree, such as `/root` or `/root/judge`. */
+  readonly agentPath?: string;
+  /** The name a Claude Code teammate is addressed by. */
+  readonly agentName?: string;
   readonly cwd?: string;
   readonly seenAt?: string;
   readonly cliVersion?: string;
@@ -34,6 +38,14 @@ export interface AgentPatch {
 
 export type Outcome = "done" | "failed" | "cancelled";
 export type ChildOutcome = "launched" | Outcome;
+
+/** One end of an agent-to-agent message, as the transcript names it. The store resolves it. */
+export type Endpoint =
+  | { readonly kind: "agent"; readonly id: AgentId }
+  /** A Codex agent path, resolved within the tree that `near` belongs to. */
+  | { readonly kind: "codex-path"; readonly near: AgentId; readonly path: string }
+  /** A Claude Code `SendMessage` target (an agent id, a name, or `main`), resolved within `session`. */
+  | { readonly kind: "claude-target"; readonly session: AgentId; readonly target: string };
 
 export interface ProcessRecord {
   readonly pid: number;
@@ -54,6 +66,14 @@ export type Fact =
       readonly fallback: AgentId;
     }
   | { readonly kind: "spawn-call"; readonly by: AgentId; readonly callId: string }
+  // `key` is unique per message, so a message seen twice counts once.
+  | {
+      readonly kind: "message";
+      readonly key: string;
+      readonly from: Endpoint;
+      readonly to: Endpoint;
+      readonly at: string | null;
+    }
   | { readonly kind: "activity"; readonly id: AgentId; readonly activity: Activity }
   // `key: null` is a cumulative total that replaces earlier usage.
   | {

@@ -1,7 +1,7 @@
-import type { AgentId, AgentNode, AgentStatus } from "../domain.ts";
+import type { AgentId, AgentNode, AgentStatus, MessageLink } from "../domain.ts";
 import { kindLabel, modelOf, statusLine } from "../format.ts";
 import type { Tree } from "../graph.ts";
-import { connector, layout, type Bounds, type Layout } from "../layout.ts";
+import { connector, layout, messageArc, type Bounds, type Layout } from "../layout.ts";
 import { h, icon, providerIcon, svgElement, type IconName } from "./dom.ts";
 
 // pstack-flex addition. The node canvas: cards for agents, wires for spawn
@@ -55,6 +55,14 @@ interface Wire {
   readonly to: AgentId;
 }
 
+interface Talk {
+  readonly path: SVGPathElement;
+  readonly badge: HTMLElement;
+  readonly count: HTMLElement;
+  readonly from: AgentId;
+  readonly to: AgentId;
+}
+
 interface Camera {
   x: number;
   y: number;
@@ -74,7 +82,9 @@ export class Canvas {
   private readonly tethers: SVGGElement;
   private readonly wiresBase: SVGGElement;
   private readonly wiresFlow: SVGGElement;
+  private readonly talkLayer: SVGGElement;
   private readonly sparks: SVGGElement;
+  private readonly talks = new Map<string, Talk>();
   private readonly zoomLabel: HTMLElement;
   private readonly followButton: HTMLButtonElement;
   private readonly empty: HTMLElement;
@@ -93,10 +103,24 @@ export class Canvas {
 
   constructor(private readonly events: CanvasEvents) {
     const svg = svgElement("svg", { class: "wires", "aria-hidden": "true" });
+    const arrow = svgElement("marker", {
+      id: "talk-arrow",
+      viewBox: "0 0 10 10",
+      refX: 8,
+      refY: 5,
+      markerWidth: 7,
+      markerHeight: 7,
+      orient: "auto-start-reverse",
+      markerUnits: "userSpaceOnUse",
+    });
+    arrow.append(svgElement("path", { d: "M 1 1.5 L 9 5 L 1 8.5 Z", class: "talk-arrow" }));
+    const defs = svgElement("defs");
+    defs.append(arrow);
     this.wiresBase = svgElement("g", { class: "wires-base" });
+    this.talkLayer = svgElement("g", { class: "talks" });
     this.wiresFlow = svgElement("g", { class: "wires-flow" });
     this.sparks = svgElement("g", { class: "sparks" });
-    svg.append(this.wiresBase, this.wiresFlow, this.sparks);
+    svg.append(defs, this.wiresBase, this.talkLayer, this.wiresFlow, this.sparks);
     // Tethers sit above the cards so the model port reads as attached to the card's edge.
     const overlay = svgElement("svg", { class: "wires", "aria-hidden": "true" });
     this.tethers = svgElement("g", { class: "tethers" });
@@ -144,7 +168,7 @@ export class Canvas {
     if (this.selected !== null) this.reveal(this.selected);
   }
 
-  render(tree: Tree | null, selected: AgentId | null, now: number): void {
+  render(tree: Tree | null, selected: AgentId | null, now: number, links: readonly MessageLink[] = []): void {
     this.selected = selected;
     if (tree === null) {
       this.reset();
@@ -215,6 +239,30 @@ export class Canvas {
       this.wires.delete(key);
     }
 
+    const liveTalks = new Set<string>();
+    for (const link of links) {
+      const from = this.views.get(link.from);
+      const to = this.views.get(link.to);
+      if (from === undefined || to === undefined) continue;
+      const key = `${link.from}>${link.to}`;
+      liveTalks.add(key);
+      let talk = this.talks.get(key);
+      if (talk === undefined) {
+        talk = this.createTalk(link.from, link.to);
+        this.talks.set(key, talk);
+      }
+      talk.count.textContent = String(link.count);
+      const label = `${link.count} ${link.count === 1 ? "message" : "messages"} from ${from.node.title} to ${to.node.title}`;
+      talk.badge.title = label;
+      talk.badge.setAttribute("aria-label", label);
+    }
+    for (const [key, talk] of this.talks) {
+      if (liveTalks.has(key)) continue;
+      talk.path.remove();
+      talk.badge.remove();
+      this.talks.delete(key);
+    }
+
     this.current = next;
     this.animateMoves(fresh || this.reducedMotion.matches);
     if (fresh) this.fit(false);
@@ -237,15 +285,28 @@ export class Canvas {
     view.card.classList.remove("is-pulsing");
     void view.card.offsetWidth;
     view.card.classList.add("is-pulsing");
-    if (this.reducedMotion.matches || document.hidden) return;
     const parent = view.node.parent;
     const wire = parent === null ? undefined : this.wires.get(`${parent}>${id}`);
-    if (wire === undefined || this.sparks.childElementCount >= MAX_SPARKS) return;
-    const spark = svgElement("circle", { r: 3.5, class: "spark" });
+    if (wire !== undefined) this.spark(wire.base, "spark");
+  }
+
+  /** A message travels its arc from sender to recipient. */
+  pulseMessage(from: AgentId, to: AgentId): void {
+    const talk = this.talks.get(`${from}>${to}`);
+    if (talk === undefined) return;
+    talk.badge.classList.remove("is-pulsing");
+    void talk.badge.offsetWidth;
+    talk.badge.classList.add("is-pulsing");
+    this.spark(talk.path, "spark spark-talk");
+  }
+
+  private spark(path: SVGPathElement, className: string): void {
+    if (this.reducedMotion.matches || document.hidden || this.sparks.childElementCount >= MAX_SPARKS) return;
+    const spark = svgElement("circle", { r: 3.5, class: className });
     const motion = svgElement("animateMotion", {
       dur: "0.85s",
       fill: "freeze",
-      path: wire.base.getAttribute("d") ?? "",
+      path: path.getAttribute("d") ?? "",
       calcMode: "spline",
       keyPoints: "0;1",
       keyTimes: "0;1",
@@ -411,6 +472,23 @@ export class Canvas {
       wire.flow.setAttribute("d", d);
       wire.glow.setAttribute("d", d);
     }
+    for (const talk of this.talks.values()) {
+      const from = this.views.get(talk.from);
+      const to = this.views.get(talk.to);
+      if (from === undefined || to === undefined) continue;
+      const arc = messageArc(from, to);
+      talk.path.setAttribute("d", arc.d);
+      talk.badge.style.transform = `translate3d(${arc.midX}px, ${arc.midY}px, 0)`;
+    }
+  }
+
+  private createTalk(from: AgentId, to: AgentId): Talk {
+    const path = svgElement("path", { class: "talk", "marker-end": "url(#talk-arrow)" });
+    this.talkLayer.append(path);
+    const count = h("span", { class: "talk-count" });
+    const badge = h("span", { class: "talk-badge", attrs: { role: "img" } }, icon("reply"), count);
+    this.cards.append(badge);
+    return { path, badge, count, from, to };
   }
 
   private createView(node: AgentNode, x: number, y: number, entering: boolean): View {
@@ -534,10 +612,12 @@ export class Canvas {
     this.cards.replaceChildren();
     this.wiresBase.replaceChildren();
     this.wiresFlow.replaceChildren();
+    this.talkLayer.replaceChildren();
     this.tethers.replaceChildren();
     this.sparks.replaceChildren();
     this.views.clear();
     this.wires.clear();
+    this.talks.clear();
     this.current = null;
   }
 

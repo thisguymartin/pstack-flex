@@ -73,6 +73,14 @@ export interface AgentNode {
   readonly health: Health;
 }
 
+/** Messages one agent sent another, summed. Direction matters: a reply is its own link. */
+export interface MessageLink {
+  readonly from: AgentId;
+  readonly to: AgentId;
+  readonly count: number;
+  readonly lastAt: string | null;
+}
+
 export interface Clipped {
   readonly text: string;
   /** Characters dropped from the end. */

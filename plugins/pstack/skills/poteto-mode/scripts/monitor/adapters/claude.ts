@@ -199,6 +199,20 @@ class TranscriptParser implements LineParser {
       out.facts.push({ kind: "usage", id: this.agent, key: text(message.id) ?? `${offset}`, usage });
     }
     assistantBlocks(this.agent, offset, at, message.content, out);
+    for (const block of array(message.content)) {
+      const call = object(block);
+      if (call?.type !== "tool_use" || call.name !== "SendMessage") continue;
+      const target = text(object(call.input)?.to);
+      // A `uds:` target is another session's socket; that session is not on this canvas.
+      if (target === null || target.startsWith("uds:")) continue;
+      out.facts.push({
+        kind: "message",
+        key: `claude:${text(call.id) ?? `${this.agent}:${offset}`}`,
+        from: { kind: "agent", id: this.agent },
+        to: { kind: "claude-target", session: this.root, target },
+        at,
+      });
+    }
     return parsed(out.facts, out.items, cliVersion);
   }
 
@@ -370,6 +384,7 @@ export function claudeAdapter(home: string): Adapter {
           root,
           ...(title !== null ? { title: oneLine(title, 120) } : {}),
           ...(model !== null ? { requestedModel: model } : {}),
+          ...(text(record.name) !== null ? { agentName: text(record.name)! } : {}),
         },
       }];
       const toolUseId = text(record.toolUseId);

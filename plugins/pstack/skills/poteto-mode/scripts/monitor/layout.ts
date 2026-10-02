@@ -101,6 +101,50 @@ export interface Box {
   readonly height: number;
 }
 
+export interface Arc {
+  readonly d: string;
+  readonly midX: number;
+  readonly midY: number;
+}
+
+/** Where a ray from the box's center toward a point leaves the box. */
+function exitPoint(box: Box, towardX: number, towardY: number): { x: number; y: number } {
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  const dx = towardX - cx;
+  const dy = towardY - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+  const t = Math.min(
+    dx === 0 ? Number.POSITIVE_INFINITY : box.width / 2 / Math.abs(dx),
+    dy === 0 ? Number.POSITIVE_INFINITY : box.height / 2 / Math.abs(dy),
+  );
+  return { x: cx + dx * t, y: cy + dy * t };
+}
+
+/**
+ * A message from one agent to another: a curve between their edges that bows
+ * to the left of travel, so a reply between the same pair takes the other side.
+ */
+export function messageArc(from: Box, to: Box): Arc {
+  const ax = from.x + from.width / 2;
+  const ay = from.y + from.height / 2;
+  const bx = to.x + to.width / 2;
+  const by = to.y + to.height / 2;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const length = Math.hypot(dx, dy) || 1;
+  const bend = Math.min(160, Math.max(56, length * 0.28));
+  const controlX = (ax + bx) / 2 + (dy / length) * bend;
+  const controlY = (ay + by) / 2 - (dx / length) * bend;
+  const start = exitPoint(from, controlX, controlY);
+  const end = exitPoint(to, controlX, controlY);
+  return {
+    d: `M ${start.x} ${start.y} Q ${controlX} ${controlY} ${end.x} ${end.y}`,
+    midX: 0.25 * start.x + 0.5 * controlX + 0.25 * end.x,
+    midY: 0.25 * start.y + 0.5 * controlY + 0.25 * end.y,
+  };
+}
+
 /** A cubic connector from a parent's output port to a child's input port. */
 export function connector(from: Box, to: Box): string {
   const x1 = from.x + from.width;

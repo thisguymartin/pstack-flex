@@ -5,11 +5,12 @@ import type {
   AgentStatus,
   Flavor,
   Harness,
+  MessageLink,
   NormalizedUsage,
   SourceKind,
   SpawnVia,
 } from "./domain.ts";
-import type { AgentPatch, ChildOutcome, Fact, Outcome, ProcessRecord } from "./adapter.ts";
+import type { AgentPatch, ChildOutcome, Endpoint, Fact, Outcome, ProcessRecord } from "./adapter.ts";
 
 // pstack-flex addition. The single owner of agent state. Adapters report
 // facts; status is derived here from evidence and never from file mtimes.
@@ -29,6 +30,8 @@ interface AgentState {
   fallbackParent: AgentId | null;
   spawnCall: string | null;
   via: SpawnVia | null;
+  agentPath: string | null;
+  agentName: string | null;
   cwd: string | null;
   cliVersion: string | null;
   entrypoint: string | null;
@@ -64,6 +67,14 @@ export interface ProbeTarget {
 export interface Flush {
   readonly rev: number;
   readonly upserts: readonly AgentNode[];
+  /** Every message link, sent whole whenever any of them changed; null when none did. */
+  readonly links: readonly MessageLink[] | null;
+}
+
+interface Message {
+  readonly from: Endpoint;
+  readonly to: Endpoint;
+  readonly at: string | null;
 }
 
 export interface StatusView {
@@ -228,6 +239,8 @@ export class Store implements StatusView {
   private readonly processRecordHarnesses = new Set<Harness>();
   private readonly sent = new Map<AgentId, string>();
   private readonly statusCache = new Map<AgentId, AgentStatus>();
+  private readonly messages = new Map<string, Message>();
+  private sentLinks = "[]";
   private dirty = false;
   private revision = 0;
 
@@ -256,6 +269,9 @@ export class Store implements StatusView {
       }
       case "spawn-call":
         this.spawnCalls.set(fact.callId, fact.by);
+        return;
+      case "message":
+        this.messages.set(fact.key, { from: fact.from, to: fact.to, at: fact.at });
         return;
       case "activity": {
         const agent = this.ensure(fact.id, {});
@@ -370,15 +386,75 @@ export class Store implements StatusView {
     return status;
   }
 
-  node(id: AgentId): AgentNode | null {
-    const agent = this.agents.get(id);
-    if (agent === undefined) return null;
+  private parentOf(agent: AgentState): AgentId | null {
     const parent = agent.spawnCall !== null
       ? this.spawnCalls.get(agent.spawnCall) ?? agent.fallbackParent
       : agent.fallbackParent;
+    return parent === agent.id ? null : parent;
+  }
+
+  /** The top of the spawn tree an agent belongs to, as far as the indexed agents reach. */
+  private treeRoot(id: AgentId): AgentId {
+    let current = id;
+    const seen = new Set<AgentId>();
+    for (;;) {
+      const agent = this.agents.get(current);
+      if (agent === undefined || seen.has(current)) return current;
+      seen.add(current);
+      const parent = this.parentOf(agent);
+      if (parent === null || !this.agents.has(parent)) return current;
+      current = parent;
+    }
+  }
+
+  private resolve(endpoint: Endpoint, codexPaths: Map<string, AgentId>): AgentId | null {
+    switch (endpoint.kind) {
+      case "agent":
+        return this.agents.has(endpoint.id) ? endpoint.id : null;
+      case "codex-path": {
+        const root = this.treeRoot(endpoint.near);
+        return endpoint.path === "/root" ? root : codexPaths.get(`${root}|${endpoint.path}`) ?? null;
+      }
+      case "claude-target": {
+        if (endpoint.target === "main") return this.agents.has(endpoint.session) ? endpoint.session : null;
+        const byId = `${endpoint.session}:${endpoint.target}` as AgentId;
+        if (this.agents.has(byId)) return byId;
+        for (const agent of this.agents.values()) {
+          if (agent.root === endpoint.session && agent.id !== endpoint.session && agent.agentName === endpoint.target) {
+            return agent.id;
+          }
+        }
+        return null;
+      }
+    }
+  }
+
+  /** Messages summed per sender and recipient. A message whose ends are not both indexed is left out. */
+  links(): MessageLink[] {
+    const codexPaths = new Map<string, AgentId>();
+    for (const agent of this.agents.values()) {
+      if (agent.agentPath !== null) codexPaths.set(`${this.treeRoot(agent.id)}|${agent.agentPath}`, agent.id);
+    }
+    const pairs = new Map<string, { from: AgentId; to: AgentId; count: number; lastAt: string | null }>();
+    for (const message of this.messages.values()) {
+      const from = this.resolve(message.from, codexPaths);
+      const to = this.resolve(message.to, codexPaths);
+      if (from === null || to === null || from === to) continue;
+      const key = `${from}>${to}`;
+      const pair = pairs.get(key) ?? { from, to, count: 0, lastAt: null };
+      pair.count += 1;
+      pair.lastAt = later(pair.lastAt, message.at);
+      pairs.set(key, pair);
+    }
+    return [...pairs.values()].sort((a, b) => (a.from === b.from ? (a.to < b.to ? -1 : 1) : a.from < b.from ? -1 : 1));
+  }
+
+  node(id: AgentId): AgentNode | null {
+    const agent = this.agents.get(id);
+    if (agent === undefined) return null;
     return {
       id: agent.id,
-      parent: parent === agent.id ? null : parent,
+      parent: this.parentOf(agent),
       via: agent.via,
       spawnCall: agent.spawnCall,
       harness: agent.harness,
@@ -410,7 +486,7 @@ export class Store implements StatusView {
     return result;
   }
 
-  /** Nodes whose serialized form changed since the last flush. */
+  /** Nodes whose serialized form changed since the last flush, and the links if any changed. */
   flush(): Flush | null {
     if (!this.dirty) return null;
     this.dirty = false;
@@ -421,9 +497,13 @@ export class Store implements StatusView {
       this.sent.set(node.id, serialized);
       upserts.push(node);
     }
-    if (upserts.length === 0) return null;
+    const links = this.links();
+    const serializedLinks = JSON.stringify(links);
+    const linksChanged = serializedLinks !== this.sentLinks;
+    this.sentLinks = serializedLinks;
+    if (upserts.length === 0 && !linksChanged) return null;
     this.revision += 1;
-    return { rev: this.revision, upserts };
+    return { rev: this.revision, upserts, links: linksChanged ? links : null };
   }
 
   private changed(): void {
@@ -450,6 +530,8 @@ export class Store implements StatusView {
       fallbackParent: null,
       spawnCall: null,
       via: null,
+      agentPath: null,
+      agentName: null,
       cwd: null,
       cliVersion: null,
       entrypoint: null,
@@ -481,6 +563,8 @@ export class Store implements StatusView {
       agent.root = patch.root;
       if (agent.fallbackParent === null && patch.root !== agent.id) agent.fallbackParent = patch.root;
     }
+    if (patch.agentPath !== undefined) agent.agentPath = patch.agentPath;
+    if (patch.agentName !== undefined) agent.agentName = patch.agentName;
     if (patch.cwd !== undefined) agent.cwd = patch.cwd;
     if (patch.cliVersion !== undefined) agent.cliVersion = patch.cliVersion;
     if (patch.entrypoint !== undefined) agent.entrypoint = patch.entrypoint;

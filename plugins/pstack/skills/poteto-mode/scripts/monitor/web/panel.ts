@@ -1,4 +1,4 @@
-import type { AgentId, AgentNode, Clipped, TimelineItem } from "../domain.ts";
+import type { AgentId, AgentNode, Clipped, MessageLink, TimelineItem } from "../domain.ts";
 import { clockTime, compactNumber, duration, kindLabel, modelOf, prettyModel, shortPath, statusLine, summarizeInput } from "../format.ts";
 import type { TimelinePage } from "../wire.ts";
 import { h, icon, providerIcon, toolIcon, type IconName } from "./dom.ts";
@@ -51,6 +51,7 @@ export class Panel {
   private readonly emptyNote: HTMLElement;
   private agent: AgentNode | null = null;
   private nodes: ReadonlyMap<AgentId, AgentNode> = new Map();
+  private links: readonly MessageLink[] = [];
   private readonly items = new Map<string, TimelineItem>();
   private readonly expanded = new Set<string>();
   private older: number | null = null;
@@ -119,9 +120,10 @@ export class Panel {
     this.element.dataset.open = "false";
   }
 
-  update(nodes: ReadonlyMap<AgentId, AgentNode>, now: number): void {
+  update(nodes: ReadonlyMap<AgentId, AgentNode>, now: number, links: readonly MessageLink[]): void {
     if (this.agent === null) return;
     this.nodes = nodes;
+    this.links = links;
     const latest = nodes.get(this.agent.id);
     if (latest !== undefined) this.agent = latest;
     this.renderHeader(now);
@@ -189,6 +191,9 @@ export class Panel {
       link.addEventListener("click", () => this.events.select(parent.id));
       rows.push(["Spawned by", link]);
     }
+    const sent = this.links.filter((link) => link.from === node.id).reduce((sum, link) => sum + link.count, 0);
+    const received = this.links.filter((link) => link.to === node.id).reduce((sum, link) => sum + link.count, 0);
+    if (sent + received > 0) rows.push(["Messages", `${sent} sent · ${received} received`]);
     if (node.cwd !== null) rows.push(["Folder", h("span", { class: "mono", text: shortPath(node.cwd), title: node.cwd })]);
     this.facts.replaceChildren(...rows.flatMap(([term, value]) => [h("dt", { text: term }), h("dd", {}, value)]));
 

@@ -1,4 +1,4 @@
-import type { AgentId, AgentNode, Health, SourceKind, TimelineItem } from "./domain.ts";
+import type { AgentId, AgentNode, Health, MessageLink, SourceKind, TimelineItem } from "./domain.ts";
 
 // pstack-flex addition. The JSON shapes the server sends the browser.
 
@@ -32,6 +32,7 @@ export interface ServerInfo {
 export interface Snapshot {
   readonly rev: number;
   readonly agents: readonly AgentNode[];
+  readonly links: readonly MessageLink[];
   readonly health: readonly SourceHealth[];
   readonly server: ServerInfo;
 }
@@ -39,6 +40,8 @@ export interface Snapshot {
 export interface Delta {
   readonly rev: number;
   readonly upserts: readonly AgentNode[];
+  /** The whole link list when it changed; null when it did not. */
+  readonly links: readonly MessageLink[] | null;
   readonly health: readonly SourceHealth[] | null;
   readonly indexing: boolean;
 }

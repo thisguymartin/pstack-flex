@@ -143,6 +143,8 @@ class RolloutParser implements LineParser {
         ...(cliVersion !== null ? { cliVersion } : {}),
         ...(text(payload.originator) !== null ? { entrypoint: text(payload.originator)! } : {}),
         ...(title !== null ? { title } : {}),
+        // Codex addresses agents by path within a tree; the root thread is `/root`.
+        ...(agentPath !== null ? { agentPath } : this.isChild ? {} : { agentPath: "/root" }),
       },
     }];
     if (parent !== null) facts.push({ kind: "link", id: this.agent, parent: threadId(parent), via: "thread-spawn" });
@@ -249,10 +251,20 @@ class RolloutParser implements LineParser {
         return parsed([], [{ id, at, kind: "tool-result", callId, ok: null, output: clip(output, BODY_LIMIT) }]);
       }
       case "agent_message": {
-        const author = text(payload.author) ?? "agent";
-        const recipient = text(payload.recipient) ?? "agent";
+        // Recorded once, in the recipient's rollout.
+        const author = text(payload.author);
+        const recipient = text(payload.recipient);
         const body = contentText(payload.content);
-        return parsed([], [{ id, at, kind: "notice", level: "info", text: `${author} → ${recipient}: ${oneLine(body, 600)}` }]);
+        const facts: Fact[] = author === null || recipient === null
+          ? []
+          : [{
+              kind: "message",
+              key: `codex:${text(payload.id) ?? `${this.agent}:${offset}`}`,
+              from: { kind: "codex-path", near: this.agent, path: author },
+              to: { kind: "codex-path", near: this.agent, path: recipient },
+              at,
+            }];
+        return parsed(facts, [{ id, at, kind: "notice", level: "info", text: `${author ?? "agent"} → ${recipient ?? "agent"}: ${oneLine(body, 600)}` }]);
       }
       case "compaction":
         return parsed([], [{ id, at, kind: "notice", level: "info", text: "context compacted" }]);
