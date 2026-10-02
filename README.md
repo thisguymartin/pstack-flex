@@ -142,7 +142,17 @@ Use pstack:poteto-mode. Add saved filters to search. Keep the design simple, ver
 
 For that feature, poteto-mode should first understand how search works today. It should decide how the data should be represented before writing code, implement the smallest complete version, run the feature the way a user would, review the result, and prepare the pull request.
 
-That is the main workflow. The other skills are there when poteto-mode needs them or when you want to call one directly. **[docs/USAGE.md](docs/USAGE.md)** is the longer walkthrough: three setup configurations (full frontier, hybrid saver, zero-subscription), copy-paste examples for the daily skills, how to read receipts, and troubleshooting.
+That is the main workflow. The other skills are there when poteto-mode needs them or when you want to call one directly. **[docs/USAGE.md](docs/USAGE.md)** is the longer walkthrough: three setup configurations (full frontier, hybrid saver, zero-subscription), copy-paste examples for the daily skills, how to read receipts, watching your agents, and troubleshooting.
+
+### 3. Watch your agents (optional)
+
+The monitor does not start by itself. Start it when you want to watch a run:
+
+```text
+/pstack:monitor
+```
+
+In Codex, ask for `pstack:monitor`. It prints a link to a local page that draws every session, the agents it spawned, the external lanes pstack launched, and the messages between them, live. It keeps running in the background until you say "pstack, kill the monitor" or restart the machine. See [Watching your agents](docs/USAGE.md#watching-your-agents-the-monitor) for the terminal commands and troubleshooting.
 
 ## Useful skills
 
