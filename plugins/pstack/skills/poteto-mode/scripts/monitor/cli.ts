@@ -1,5 +1,7 @@
 import { parseArgs as parseNodeArgs } from "node:util";
+import { DEFAULT_PORT, serve, start, status, stop, type Io } from "./daemon.ts";
 import { diagnose, renderReport } from "./doctor.ts";
+import type { Harness } from "./domain.ts";
 import { homes, type Homes } from "./sources.ts";
 
 // pstack-flex addition. Entry point for `pstack-monitor`.
@@ -7,18 +9,24 @@ import { homes, type Homes } from "./sources.ts";
 const HELP = `Usage: pstack-monitor <command> [options]
 
 Commands:
-  doctor [--hours <n>]   Index recent transcripts headlessly and report how well
-                         each source parsed. Prints counts, never content.
+  start     Start the monitor in the background, or reuse the running one,
+            and print the link to open. Safe to run repeatedly.
+  status    Print a one-line summary and the link.
+  stop      Stop the running monitor.
+  doctor    Index recent transcripts headlessly and report how well each
+            source parsed. Prints counts, never content.
+  serve     Run the server in the foreground (what \`start\` launches).
 
 Options:
-  --hours <n>            How far back to index (default 24).
-  -h, --help             Show this help.
-`;
+  --parent <claude|codex>  The harness asking; sets the page's default theme
+                           and focuses that harness's current session.
+  --focus <session id>     Session to select first (defaults from --parent).
+  --port <n>               Port on 127.0.0.1 (default ${DEFAULT_PORT}).
+  --hours <n>              How far back to index (default 24).
+  -h, --help               Show this help.
 
-export interface Io {
-  readonly stdout: (value: string) => void;
-  readonly stderr: (value: string) => void;
-}
+The monitor has no idle timeout; it runs until \`pstack-monitor stop\`.
+`;
 
 const defaultIo: Io = {
   stdout: (value) => process.stdout.write(value),
@@ -27,12 +35,31 @@ const defaultIo: Io = {
 
 class UsageError extends Error {}
 
-interface Options {
-  readonly command: "doctor" | "help";
+const COMMANDS = ["start", "status", "stop", "doctor", "serve"] as const;
+type Command = (typeof COMMANDS)[number];
+
+export interface Options {
+  readonly command: Command | "help";
+  readonly port: number;
   readonly hours: number;
+  readonly harness: Harness | null;
+  readonly focus: string | null;
 }
 
-export function parseArgs(argv: readonly string[]): Options {
+function positiveNumber(name: string, value: unknown, fallback: number): number {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) throw new UsageError(`--${name} must be a number greater than zero`);
+  return parsed;
+}
+
+/** The harness's own session id, read from the environment it gives its tools. */
+function currentSession(harness: Harness | null, env: NodeJS.ProcessEnv): string | null {
+  const value = harness === "claude" ? env.CLAUDE_CODE_SESSION_ID : harness === "codex" ? env.CODEX_THREAD_ID : undefined;
+  return value !== undefined && value.length > 0 ? value : null;
+}
+
+export function parseArgs(argv: readonly string[], env: NodeJS.ProcessEnv = process.env): Options {
   let parsed: ReturnType<typeof parseNodeArgs>;
   try {
     parsed = parseNodeArgs({
@@ -40,6 +67,9 @@ export function parseArgs(argv: readonly string[]): Options {
       allowPositionals: true,
       strict: true,
       options: {
+        parent: { type: "string" },
+        focus: { type: "string" },
+        port: { type: "string" },
         hours: { type: "string" },
         help: { type: "boolean", short: "h", default: false },
       },
@@ -48,14 +78,22 @@ export function parseArgs(argv: readonly string[]): Options {
     throw new UsageError(error instanceof Error ? error.message : String(error));
   }
   const command = parsed.positionals[0];
-  if (parsed.values.help === true || command === undefined || command === "help") {
-    return { command: "help", hours: 24 };
+  const port = positiveNumber("port", parsed.values.port, DEFAULT_PORT);
+  if (!Number.isInteger(port) || port > 65_535) throw new UsageError("--port must be an integer port number");
+  const hours = positiveNumber("hours", parsed.values.hours, 24);
+  const parent = parsed.values.parent;
+  if (parent !== undefined && parent !== "claude" && parent !== "codex") {
+    throw new UsageError("--parent must be claude or codex");
   }
-  if (command !== "doctor") throw new UsageError(`unknown command: ${command}`);
-  const rawHours = parsed.values.hours;
-  const hours = typeof rawHours === "string" ? Number(rawHours) : 24;
-  if (!Number.isFinite(hours) || hours <= 0) throw new UsageError("--hours must be a number greater than zero");
-  return { command, hours };
+  const harness = parent ?? null;
+  const focusValue = typeof parsed.values.focus === "string" && parsed.values.focus.length > 0 ? parsed.values.focus : null;
+  const session = focusValue ?? currentSession(harness, env);
+  const focus = session === null || harness === null || session.includes(":") ? session : `${harness}:${session}`;
+  if (parsed.values.help === true || command === undefined || command === "help") {
+    return { command: "help", port, hours, harness, focus };
+  }
+  if (!(COMMANDS as readonly string[]).includes(command)) throw new UsageError(`unknown command: ${command}`);
+  return { command: command as Command, port, hours, harness, focus };
 }
 
 export async function main(
@@ -74,6 +112,14 @@ export async function main(
     case "help":
       io.stdout(HELP);
       return 0;
+    case "start":
+      return start(where, { port: options.port, windowHours: options.hours, harness: options.harness, focus: options.focus }, io);
+    case "status":
+      return status(where, io);
+    case "stop":
+      return stop(where, io);
+    case "serve":
+      return serve(where, { port: options.port, windowHours: options.hours, assets: async () => null }, io);
     case "doctor": {
       const report = await diagnose(where, Date.now() - options.hours * 3_600_000);
       io.stdout(renderReport(report, options.hours));
