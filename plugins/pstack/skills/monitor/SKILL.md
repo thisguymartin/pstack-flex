@@ -1,11 +1,21 @@
 ---
 name: monitor
-description: "Open a live local view of the agents on this machine: Claude Code and Codex sessions, every subagent they spawn, and pstack's external model lanes, with each agent's activity streaming in a drill-down panel. Use for /monitor, 'show me the agents', 'what is running', or to watch an arena, swarm, or interrogate fan-out."
+description: "Open a live local view of the agents on this machine: Claude Code and Codex sessions, every subagent they spawn, and pstack's external model lanes, with each agent's activity streaming in a drill-down panel. Also stops it. Use for /monitor, 'show me the agents', 'what is running', watching an arena, swarm, or interrogate fan-out, or 'stop / kill / shut down the monitor'."
 ---
 
 # Monitor
 
-Start the agent monitor and hand the user its link.
+Start the agent monitor and hand the user its link, or stop it when asked.
+
+Match the request to one command and run only that one:
+
+| The user asks to | Run |
+| --- | --- |
+| open, show, or start the monitor (the default) | `pstack-monitor start --parent <claude\|codex>` |
+| stop, kill, close, or shut down the monitor | `pstack-monitor stop` |
+| check whether it is running, or get the link again | `pstack-monitor status` |
+
+`stop` ends the monitor server only. It never touches the sessions or agents the page shows; the monitor is read-only. If the user wants a running agent stopped, tell them to stop it where it runs: interrupt it in its own Claude Code or Codex session, or cancel a pstack lane through the background task that launched it, which makes the runner write a `cancelled` receipt.
 
 The launcher lives at `skills/poteto-mode/scripts/monitor/pstack-monitor` under the installed plugin. Run it with the harness you are running in:
 
@@ -19,10 +29,10 @@ The first `start` also turns on the lane journal, so external lanes launched thr
 
 `--parent` sets the page's theme (warm for Claude Code, blue for Codex) and selects your own session first. It names the harness you are; it does not route anything.
 
+`stop` waits until the server has exited, then prints `pstack-monitor stopped`, or `pstack-monitor is not running` when there was nothing to stop. Relay that line. Stopping leaves the lane journal as it is; `journal off` is a separate request.
+
 Other commands:
 
-- `pstack-monitor status` prints a one-line summary and the link.
-- `pstack-monitor stop` stops the server.
 - `pstack-monitor doctor` reports how well recent transcripts parsed, as counts only. Run it when the page warns that a source is degraded or newer than the monitor was checked against, and relay the result.
 - `pstack-monitor journal <on|off|status>` controls the lane journal.
 
