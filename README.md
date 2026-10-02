@@ -170,7 +170,7 @@ Both apps read the same pstack skills. Only the way they start those skills and 
 
 | | Claude Code | Codex |
 | --- | --- | --- |
-| Start poteto-mode | Run `/pstack:poteto-mode` or ask for pstack by name. A small startup instruction keeps Claude from starting pstack skills on its own. | Ask for `pstack:poteto-mode` by name. Codex does not load the Claude startup instruction. |
+| Start poteto-mode | Run `/pstack:poteto-mode` or ask for pstack by name. A small startup instruction keeps Claude from starting pstack skills on its own. | Ask for `pstack:poteto-mode` by name. Codex runs the same startup instruction, so pstack skills also wait for a request there. |
 | Runs inside the app | Claude models stay inside Claude Code. | The Codex families stay inside Codex. |
 | Other models | The Codex families and Grok run through their signed-in command-line tools. | Claude and Grok run through their signed-in command-line tools. |
 | Gateway models | DeepSeek and MiniMax always run through the external runner with an isolated config directory, never as a native agent. | Same. |
