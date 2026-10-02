@@ -37,6 +37,7 @@ All flex changes are additive and live in port-owned files so upstream merges st
 - The assignment-first restructure of `skills/setup-pstack/SKILL.md`
 - `docs/LANES.md`, this file, the README fork section, and the NOTICE/LICENSE/CHANGES additions
 - `plugins/pstack/hooks/session-start-context.md`, which the fork rewrote from open-pstack's auto-fire mandate into an opt-in gate, and the docs lines that describe it
+- The agent monitor: `plugins/pstack/skills/monitor/`, `plugins/pstack/skills/poteto-mode/scripts/monitor/`, the `monitor` entries in the scripts `package.json`, and the "Agent monitor" section of `docs/reference.md`. Upstream has no equivalent, so none of these conflict on a sync.
 
 Every upstream skill body is byte-unchanged except for the default-descriptor mentions listed above. Since [#17](https://github.com/thisguymartin/pstack-flex/issues/17), the stock matrix carries three fork-owned GPT-6 rows and the first-run sheet uses them, so those two surfaces conflict on every upstream sync and are resolved by hand: keep the fork's rows and defaults, take upstream's wording for everything else.
 

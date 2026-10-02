@@ -1,5 +1,11 @@
 # CHANGES — applied substitutions
 
+## Unreleased: agent monitor
+
+- Add `/pstack:monitor` and `pstack-monitor`, a read-only local server with a live node canvas of the agents on this machine: Claude Code and Codex sessions, the subagents they spawn, and each agent's model. Any agent opens into a panel that streams its prompts, replies, thinking, and tool calls. The theme follows the session's harness: warm for Claude Code, blue for Codex.
+- The monitor reads the transcripts each harness already writes and adds no hook, so it costs nothing in sessions that never open it. Status comes from process records, lifecycle events, and parent tool results, never file times; what cannot be known shows as unknown. Unrecognized transcript records are counted and surfaced instead of dropped, and `pstack-monitor doctor` reports them without printing content.
+- The server binds `127.0.0.1`, accepts no writes, rejects foreign `Host` and `Origin` headers, and requires a per-start token. It runs until `pstack-monitor stop`. Tracked in [pstack-flex #23](https://github.com/thisguymartin/pstack-flex/issues/23).
+
 ## Unreleased: merge open-pstack 1.5.0 (Cursor pstack 0.15.5)
 
 - Merge open-pstack 1.5.0, which syncs Cursor pstack 0.15.2 to 0.15.5: code-ready rounds and owner authority in the autopilot playbooks, Swarm SHA and method briefs, Architect reading `architect runners`, decision-trail `start` rows and the non-truncating `log.sh`, retired-role handling in setup, and the upstream prompt cuts. The upstream exclusions in `UPSTREAM.md` carry over.
