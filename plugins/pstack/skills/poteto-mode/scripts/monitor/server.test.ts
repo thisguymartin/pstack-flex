@@ -88,6 +88,12 @@ describe("access control", () => {
     expect(response.headers.get("content-security-policy")).toContain("script-src 'self'");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   });
+
+  it("themes the first paint from the link and accepts only known harnesses", async () => {
+    const themed = createHandler(monitor, { port: PORT, token: TOKEN, assets: { html: '<html data-harness="claude">', css: "", js: "" } });
+    expect(await (await themed(request("/?harness=codex", authed))).text()).toBe('<html data-harness="codex">');
+    expect(await (await themed(request('/?harness="><script>', authed))).text()).toBe('<html data-harness="claude">');
+  });
 });
 
 describe("data", () => {

@@ -1,4 +1,5 @@
 import { parseArgs as parseNodeArgs } from "node:util";
+import { buildAssets } from "./assets.ts";
 import { DEFAULT_PORT, serve, start, status, stop, type Io } from "./daemon.ts";
 import { diagnose, renderReport } from "./doctor.ts";
 import type { Harness } from "./domain.ts";
@@ -119,7 +120,7 @@ export async function main(
     case "stop":
       return stop(where, io);
     case "serve":
-      return serve(where, { port: options.port, windowHours: options.hours, assets: async () => null }, io);
+      return serve(where, { port: options.port, windowHours: options.hours, assets: buildAssets }, io);
     case "doctor": {
       const report = await diagnose(where, Date.now() - options.hours * 3_600_000);
       io.stdout(renderReport(report, options.hours));

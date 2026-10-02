@@ -18,7 +18,7 @@ export interface Assets {
 export interface HandlerOptions {
   readonly port: number;
   readonly token: string;
-  readonly assets: Assets | null;
+  readonly assets: Assets;
 }
 
 /** The subset of Bun's server the handler uses; absent in tests. */
@@ -112,18 +112,16 @@ export function createHandler(monitor: Monitor, options: HandlerOptions) {
     }
 
     switch (url.pathname) {
-      case "/":
-        return options.assets === null
-          ? plain(503, "web assets are not available")
-          : respond(200, options.assets.html, { "Content-Type": "text/html; charset=utf-8" });
+      case "/": {
+        // Theme the first paint from the link, so a Codex session never flashes orange.
+        const harness = url.searchParams.get("harness") === "codex" ? "codex" : "claude";
+        const html = options.assets.html.replace('data-harness="claude"', `data-harness="${harness}"`);
+        return respond(200, html, { "Content-Type": "text/html; charset=utf-8" });
+      }
       case "/app.js":
-        return options.assets === null
-          ? plain(404, "not found")
-          : respond(200, options.assets.js, { "Content-Type": "text/javascript; charset=utf-8" });
+        return respond(200, options.assets.js, { "Content-Type": "text/javascript; charset=utf-8" });
       case "/app.css":
-        return options.assets === null
-          ? plain(404, "not found")
-          : respond(200, options.assets.css, { "Content-Type": "text/css; charset=utf-8" });
+        return respond(200, options.assets.css, { "Content-Type": "text/css; charset=utf-8" });
       case "/api/snapshot":
         return json(monitor.snapshot());
       case "/api/timeline": {

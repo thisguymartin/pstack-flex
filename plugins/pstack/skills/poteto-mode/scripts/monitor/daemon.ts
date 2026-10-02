@@ -28,7 +28,7 @@ export interface Io {
 export interface ServeOptions {
   readonly port: number;
   readonly windowHours: number;
-  readonly assets: () => Promise<Assets | null>;
+  readonly assets: () => Promise<Assets>;
 }
 
 export interface StartOptions {
