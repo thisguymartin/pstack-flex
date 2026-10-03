@@ -61,17 +61,60 @@ export const STATUS_WORD: Record<AgentStatus["kind"], string> = {
   unknown: "unknown",
 };
 
-/** One line of status for a card, e.g. `running · 2m 14s` or `done · 4m ago`. */
+export const QUIET_MS = 90_000;
+export const STALE_MS = 15 * 60_000;
+
+const RUNNING_VERB = { pid: "working", lifecycle: "in turn", parent: "running" } as const;
+
+/** How long a running agent has gone without stamped activity, once past `QUIET_MS`. Lanes stamp none. */
+export function quietFor(node: AgentNode, now: number): number | null {
+  if (node.status.kind !== "running" || node.activity?.at == null || node.lastActivityAt === null) return null;
+  const silent = now - Date.parse(node.lastActivityAt);
+  return Number.isFinite(silent) && silent > QUIET_MS ? silent : null;
+}
+
+/**
+ * A turn that opened and then went silent. Only a missing end-of-turn record says it still runs,
+ * which is what a process killed mid-turn leaves behind; a live process record is never stalled.
+ */
+export function stalled(node: AgentNode, now: number): boolean {
+  if (node.status.kind !== "running" || node.status.evidence !== "lifecycle" || node.lastActivityAt === null) return false;
+  const silent = now - Date.parse(node.lastActivityAt);
+  return Number.isFinite(silent) && silent >= STALE_MS;
+}
+
+/** Doing work now, as far as the evidence shows. */
+export function working(node: AgentNode, now: number): boolean {
+  return node.status.kind === "running" && !stalled(node, now);
+}
+
+/** What the agent is doing now: the call it waits on, else its latest step. */
+export function activityLine(node: AgentNode): string | null {
+  if (node.pending !== null) return node.pending.snippet;
+  if (node.activity !== null) return node.activity.snippet;
+  if (node.status.kind === "running" && node.flavor.kind === "lane" && node.flavor.stream === "at-exit") return "reply arrives at exit";
+  return null;
+}
+
+/** One line of status for a card, e.g. `working · 2m 14s` or `done · 4m ago`. */
 export function statusLine(node: AgentNode, now: number): string {
   const status = node.status;
+  const session = node.flavor.kind === "session";
   switch (status.kind) {
     case "running": {
+      if (stalled(node, now)) return `stalled · ${ago(node.lastActivityAt, now)}`;
       const since = node.startedAt === null ? null : now - Date.parse(node.startedAt);
-      const verb = status.evidence === "lifecycle" ? "in turn" : "running";
-      return since === null || !Number.isFinite(since) ? verb : `${verb} · ${duration(since)}`;
+      const verb = RUNNING_VERB[status.evidence];
+      const line = since === null || !Number.isFinite(since) ? verb : `${verb} · ${duration(since)}`;
+      const quiet = quietFor(node, now);
+      return quiet === null ? line : `${line} · quiet ${duration(quiet)}`;
     }
-    case "idle":
-      return status.detail === null ? `idle · ${ago(node.lastActivityAt, now)}` : `${status.detail.replace(/_/g, " ")}`;
+    case "idle": {
+      if (status.detail !== null) return status.detail.replace(/_/g, " ");
+      const since = ago(node.lastActivityAt, now);
+      if (session && status.evidence === "pid") return `waiting for input · ${since}`;
+      return `${session ? "between turns" : "idle"} · ${since}`;
+    }
     case "done":
       return `done · ${ago(status.at ?? node.lastActivityAt, now)}`;
     case "failed":
@@ -79,7 +122,7 @@ export function statusLine(node: AgentNode, now: number): string {
     case "cancelled":
       return `cancelled · ${ago(status.at ?? node.lastActivityAt, now)}`;
     case "ended":
-      return `ended · ${ago(status.at ?? node.lastActivityAt, now)}`;
+      return session ? "ended · process gone" : `ended · ${ago(status.at ?? node.lastActivityAt, now)}`;
     case "unknown":
       return "status unknown";
   }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LANES_DIR_VAR, lanesRoot, openLaneJournal } from "./flex-journal.ts";
@@ -31,6 +31,21 @@ afterEach(() => {
 });
 
 describe("openLaneJournal", () => {
+  it("records the head of the prompt, and nothing when it cannot be read", () => {
+    const root = join(scratch, "lanes");
+    mkdirSync(root);
+    const promptPath = join(scratch, "prompt.md");
+    writeFileSync(promptPath, `Judge   the\ncandidates.\n${"x".repeat(400)}`);
+    openLaneJournal({ ...options, promptPath }, Date.now(), { [LANES_DIR_VAR]: root });
+    openLaneJournal(options, Date.now() + 1, { [LANES_DIR_VAR]: root });
+    const heads = readdirSync(root)
+      .map((lane) => JSON.parse(readFileSync(join(root, lane, "lane.json"), "utf8")).promptHead as string | null)
+      .sort((a, b) => (a === null ? -1 : b === null ? 1 : 0));
+    expect(heads[0]).toBeNull();
+    expect(heads[1]).toStartWith("Judge the candidates. xxx");
+    expect(heads[1]).toHaveLength(300);
+  });
+
   it("defaults under the user's pstack-flex directory and honors an override", () => {
     expect(lanesRoot({})).toEndWith(join(".pstack-flex", "lanes"));
     expect(lanesRoot({ [LANES_DIR_VAR]: "/elsewhere" })).toBe("/elsewhere");

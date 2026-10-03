@@ -134,11 +134,15 @@ describe("launcher", () => {
     expect(parseArgs(["start"], { CLAUDE_CODE_SESSION_ID: "abc" })).toMatchObject({ harness: null, focus: null });
     expect(() => parseArgs(["start", "--parent", "cursor"], {})).toThrow("--parent");
     expect(() => parseArgs(["start", "--port", "99999"], {})).toThrow("--port");
+    expect(parseArgs(["start"], {})).toMatchObject({ scope: "pstack" });
+    expect(parseArgs(["start", "--all"], {})).toMatchObject({ scope: "all" });
   });
 
   it("builds a link that carries the token, theme, and focus", () => {
     const url = launchUrl({ pid: 1, port: 47317, token: "t", version: "v", instance: "i", startedAt: "s" }, "codex", "codex:t1");
     expect(url).toBe("http://127.0.0.1:47317/?token=t&harness=codex&focus=codex%3At1");
+    const all = launchUrl({ pid: 1, port: 47317, token: "t", version: "v", instance: "i", startedAt: "s" }, null, null, "all");
+    expect(all).toBe("http://127.0.0.1:47317/?token=t&all=1");
   });
 
   it("summarizes agent counts in a stable order", () => {

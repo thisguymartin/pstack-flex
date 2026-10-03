@@ -7,6 +7,8 @@ import type {
   Harness,
   MessageLink,
   NormalizedUsage,
+  PendingCall,
+  Prompt,
   SourceKind,
   SpawnVia,
 } from "./domain.ts";
@@ -44,6 +46,9 @@ interface AgentState {
   startedAt: string | null;
   lastActivityAt: string | null;
   activity: Activity | null;
+  pstack: boolean;
+  prompt: Prompt | null;
+  readonly openCalls: Map<string, PendingCall>;
   usageTotal: NormalizedUsage | null;
   readonly usageByKey: Map<string, NormalizedUsage>;
   outcome: Ended | null;
@@ -84,6 +89,8 @@ export interface StatusView {
   keepsProcessRecords(harness: Harness): boolean;
   status(id: AgentId): AgentStatus | null;
 }
+
+const MAX_OPEN_CALLS = 16;
 
 const USAGE_FIELDS = [
   "inputTokens",
@@ -169,15 +176,20 @@ export function deriveStatus(agent: AgentState, view: StatusView): AgentStatus {
   }
 }
 
-function codexStatus(agent: AgentState, isRoot: boolean): AgentStatus {
+/** Status from turn boundaries alone; null when no turn was ever recorded. */
+function lifecycleStatus(agent: AgentState, isRoot: boolean): AgentStatus | null {
   if (agent.openTurn !== null) return { kind: "running", evidence: "lifecycle" };
-  if (agent.lastTurn === null) return { kind: "unknown", why: "no turn recorded yet" };
+  if (agent.lastTurn === null) return null;
   if (isRoot) {
     return agent.lastTurn.outcome === "done"
       ? { kind: "idle", evidence: "lifecycle", detail: null }
       : { kind: "idle", evidence: "lifecycle", detail: agent.lastTurn.outcome === "cancelled" ? "interrupted" : "last turn failed" };
   }
   return ended(agent.lastTurn);
+}
+
+function codexStatus(agent: AgentState, isRoot: boolean): AgentStatus {
+  return lifecycleStatus(agent, isRoot) ?? { kind: "unknown", why: "no turn recorded yet" };
 }
 
 function claudeSessionStatus(agent: AgentState, view: StatusView): AgentStatus {
@@ -189,7 +201,9 @@ function claudeSessionStatus(agent: AgentState, view: StatusView): AgentStatus {
   if (view.keepsProcessRecords("claude") && agent.entrypoint === "cli") {
     return { kind: "ended", at: agent.lastActivityAt };
   }
-  // Desktop and SDK sessions keep no process record, so liveness cannot be known.
+  // Desktop and SDK sessions keep no process record; their turns are the only evidence.
+  const turns = lifecycleStatus(agent, true);
+  if (turns !== null) return turns;
   return {
     kind: "unknown",
     why: agent.entrypoint === null ? "no process record" : `${agent.entrypoint} sessions keep no process record`,
@@ -204,11 +218,14 @@ function claudeSubagentStatus(agent: AgentState, view: StatusView): AgentStatus 
       if (status !== null) return status;
     }
   }
+  // Its own transcript ending is the earliest proof of done; the parent's result can lag by minutes.
+  if (agent.openTurn === null && agent.lastTurn !== null) return ended(agent.lastTurn);
   const root = view.status(agent.root);
   if (root === null) return { kind: "unknown", why: "parent session not indexed" };
   switch (root.kind) {
     case "running":
     case "idle":
+      if (agent.openTurn !== null) return { kind: "running", evidence: "lifecycle" };
       return agent.spawnCall === null
         ? { kind: "unknown", why: "teammate; no lifecycle record" }
         : { kind: "running", evidence: "parent" };
@@ -240,6 +257,7 @@ export class Store implements StatusView {
   private readonly sent = new Map<AgentId, string>();
   private readonly statusCache = new Map<AgentId, AgentStatus>();
   private readonly messages = new Map<string, Message>();
+  private pstackRoots: Set<AgentId> | null = null;
   private sentLinks = "[]";
   private dirty = false;
   private revision = 0;
@@ -279,6 +297,27 @@ export class Store implements StatusView {
         agent.lastActivityAt = later(agent.lastActivityAt, fact.activity.at);
         return;
       }
+      case "pstack":
+        this.ensure(fact.id, {}).pstack = true;
+        return;
+      case "prompt": {
+        const agent = this.ensure(fact.id, {});
+        agent.prompt = { text: fact.text, at: fact.at };
+        agent.lastActivityAt = later(agent.lastActivityAt, fact.at);
+        return;
+      }
+      case "call": {
+        const agent = this.ensure(fact.id, {});
+        if (fact.event.kind === "started") {
+          agent.openCalls.delete(fact.callId);
+          agent.openCalls.set(fact.callId, { name: fact.event.name, snippet: fact.event.snippet, since: fact.at });
+          if (agent.openCalls.size > MAX_OPEN_CALLS) agent.openCalls.delete(agent.openCalls.keys().next().value!);
+        } else {
+          agent.openCalls.delete(fact.callId);
+        }
+        agent.lastActivityAt = later(agent.lastActivityAt, fact.at);
+        return;
+      }
       case "usage": {
         const agent = this.ensure(fact.id, {});
         if (fact.key === null) {
@@ -292,11 +331,15 @@ export class Store implements StatusView {
       case "child-outcome":
         this.childOutcomes.set(fact.callId, { outcome: fact.outcome, at: fact.at, reason: fact.reason });
         return;
-      case "outcome":
-        this.ensure(fact.id, {}).outcome = { outcome: fact.outcome, at: fact.at, reason: fact.reason };
+      case "outcome": {
+        const agent = this.ensure(fact.id, {});
+        agent.outcome = { outcome: fact.outcome, at: fact.at, reason: fact.reason };
+        agent.openCalls.clear();
         return;
+      }
       case "turn": {
         const agent = this.ensure(fact.id, {});
+        agent.openCalls.clear();
         if (fact.event.kind === "started") {
           agent.openTurn = fact.turnId;
         } else {
@@ -472,9 +515,21 @@ export class Store implements StatusView {
       startedAt: agent.startedAt,
       lastActivityAt: agent.lastActivityAt,
       activity: agent.activity,
+      pstack: this.isPstack(id),
+      prompt: agent.prompt,
+      pending: [...agent.openCalls.values()].at(-1) ?? null,
       usage: agent.usageTotal ?? sumUsage(agent.usageByKey.values()),
       health: agent.shapeErrors > 0 ? "degraded" : "ok",
     };
+  }
+
+  /** True when any agent in the same spawn tree carries pstack evidence. */
+  private isPstack(id: AgentId): boolean {
+    if (this.pstackRoots === null) {
+      this.pstackRoots = new Set();
+      for (const agent of this.agents.values()) if (agent.pstack) this.pstackRoots.add(this.treeRoot(agent.id));
+    }
+    return this.pstackRoots.has(this.treeRoot(id));
   }
 
   nodes(): AgentNode[] {
@@ -509,6 +564,7 @@ export class Store implements StatusView {
   private changed(): void {
     this.dirty = true;
     this.statusCache.clear();
+    this.pstackRoots = null;
   }
 
   private retractProcess(key: string): void {
@@ -544,6 +600,9 @@ export class Store implements StatusView {
       startedAt: null,
       lastActivityAt: null,
       activity: null,
+      pstack: false,
+      prompt: null,
+      openCalls: new Map(),
       usageTotal: null,
       usageByKey: new Map(),
       outcome: null,

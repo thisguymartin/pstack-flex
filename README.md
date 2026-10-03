@@ -152,7 +152,7 @@ The monitor does not start by itself. Start it when you want to watch a run:
 /pstack:monitor
 ```
 
-In Codex, ask for `pstack:monitor`. It prints a link to a local page that draws every session, the agents it spawned, the external lanes pstack launched, and the messages between them, live. It keeps running in the background until you say "pstack, kill the monitor" or restart the machine. See [Watching your agents](docs/USAGE.md#watching-your-agents-the-monitor) for the terminal commands and troubleshooting.
+In Codex, ask for `pstack:monitor`. It prints a link to a local page that draws each session running pstack, the agents it spawned, the external lanes pstack launched, and what each one is doing now, live. It keeps running in the background until you say "pstack, kill the monitor" or restart the machine. See [Watching your agents](docs/USAGE.md#watching-your-agents-the-monitor) for the terminal commands and troubleshooting.
 
 ## Useful skills
 
@@ -167,7 +167,7 @@ In Codex, ask for `pstack:monitor`. It prints a link to a local page that draws 
 | `maintain-verification-skill` | The project's verification instructions no longer match the product. |
 | `babysit` | A pull request needs CI failures and review comments handled until it is ready. |
 | `reflect` | A hard task is finished and its lessons should improve the next run. |
-| `monitor` | You want to watch your agents work: a live graph of every session, subagent, and model lane, with each agent's activity a click away. |
+| `monitor` | You want to watch your agents work: a live graph of each pstack session, its subagents and model lanes, and what each is doing now. |
 
 Plugin skills include `pstack:` in their name. In Claude Code, invoke a native skill such as `/pstack:architect`. In Codex, ask for the skill, such as `Use pstack:architect for this design.` See the [technical reference](docs/reference.md) for the full list.
 

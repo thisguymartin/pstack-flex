@@ -7,6 +7,8 @@ import { array, clip, contentText, object, oneLine, pretty, text } from "../json
 
 export const BODY_LIMIT = 16_000;
 export const SNIPPET_LIMIT = 140;
+export const PROMPT_LIMIT = 300;
+export const PSTACK_PREFIX = "pstack:";
 
 const SPAWN_TOOLS = new Set(["Agent", "Task"]);
 
@@ -37,6 +39,22 @@ export function describeTool(name: string, input: unknown): string {
       ?? text(record.skill)
       ?? text(record.prompt);
   return detail === null ? name : `${name} · ${oneLine(detail, SNIPPET_LIMIT)}`;
+}
+
+export function promptFact(agent: AgentId, body: string, at: string | null): Fact {
+  return { kind: "prompt", id: agent, text: oneLine(body, PROMPT_LIMIT), at };
+}
+
+export function callEnded(agent: AgentId, callId: string, at: string | null): Fact {
+  return { kind: "call", id: agent, callId, at, event: { kind: "ended" } };
+}
+
+/** A pstack skill or a pstack agent named by a Claude-style tool call. */
+export function namesPstack(name: string, input: unknown): boolean {
+  const record = object(input);
+  if (record === null) return false;
+  const target = name === "Skill" ? text(record.skill) : SPAWN_TOOLS.has(name) ? text(record.subagent_type) : null;
+  return target?.startsWith(PSTACK_PREFIX) === true;
 }
 
 export function textActivity(agent: AgentId, body: string, at: string | null): Fact {
@@ -74,13 +92,14 @@ export function assistantBlocks(
       case "mcp_tool_use": {
         const name = text(block.name) ?? "tool";
         const callId = text(block.id) ?? id;
+        const snippet = describeTool(name, block.input);
         out.items.push({ id, at, kind: "tool-call", callId, name, input: clip(pretty(block.input), BODY_LIMIT) });
-        out.facts.push({
-          kind: "activity",
-          id: agent,
-          activity: { what: "tool", snippet: describeTool(name, block.input), at },
-        });
+        out.facts.push(
+          { kind: "activity", id: agent, activity: { what: "tool", snippet, at } },
+          { kind: "call", id: agent, callId, at, event: { kind: "started", name, snippet } },
+        );
         if (SPAWN_TOOLS.has(name)) out.facts.push({ kind: "spawn-call", by: agent, callId });
+        if (namesPstack(name, block.input)) out.facts.push({ kind: "pstack", id: agent });
         return;
       }
     }

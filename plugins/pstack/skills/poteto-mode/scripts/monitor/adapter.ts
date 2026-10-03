@@ -75,6 +75,15 @@ export type Fact =
       readonly at: string | null;
     }
   | { readonly kind: "activity"; readonly id: AgentId; readonly activity: Activity }
+  | { readonly kind: "pstack"; readonly id: AgentId }
+  | { readonly kind: "prompt"; readonly id: AgentId; readonly text: string; readonly at: string | null }
+  | {
+      readonly kind: "call";
+      readonly id: AgentId;
+      readonly callId: string;
+      readonly at: string | null;
+      readonly event: { readonly kind: "started"; readonly name: string; readonly snippet: string } | { readonly kind: "ended" };
+    }
   // `key: null` is a cumulative total that replaces earlier usage.
   | {
       readonly kind: "usage";

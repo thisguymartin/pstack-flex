@@ -14,7 +14,7 @@ import {
 } from "../adapter.ts";
 import type { AgentId, Flavor, TimelineItem } from "../domain.ts";
 import { array, clip, contentText, finite, object, oneLine, parseJson, pretty, text, usageFrom } from "../json.ts";
-import { assistantBlocks, BODY_LIMIT, collected, describeTool, itemId, textActivity, toolResult } from "./blocks.ts";
+import { assistantBlocks, BODY_LIMIT, callEnded, collected, describeTool, itemId, promptFact, textActivity, toolResult } from "./blocks.ts";
 
 // pstack-flex addition. Reads the runner's lane journal: one directory per
 // external lane holding its start record, its raw stdout, and its receipt.
@@ -93,13 +93,16 @@ class StreamParser implements LineParser {
       }
       case "user": {
         const items: TimelineItem[] = [];
+        const facts: Fact[] = [];
         array(object(event.message)?.content).forEach((block, index) => {
           const record = object(block);
           if (record?.type !== "tool_result") return;
           const item = toolResult(offset, index, null, record);
-          if (item !== null) items.push(item);
+          if (item?.kind !== "tool-result") return;
+          items.push(item);
+          facts.push(callEnded(this.agent, item.callId, null));
         });
-        return parsed([], items);
+        return parsed(facts, items);
       }
       case "result": {
         const body = text(event.result);
@@ -131,15 +134,19 @@ class StreamParser implements LineParser {
     const call = (name: string, input: string): Parsed => {
       if (this.started.has(callId)) return NOTHING;
       this.started.add(callId);
+      const snippet = describeTool(name, input);
       return parsed(
-        [{ kind: "activity", id: this.agent, activity: { what: "tool", snippet: describeTool(name, input), at: null } }],
+        [
+          { kind: "activity", id: this.agent, activity: { what: "tool", snippet, at: null } },
+          { kind: "call", id: this.agent, callId, at: null, event: { kind: "started", name, snippet } },
+        ],
         [{ id: itemId(offset, 0), at: null, kind: "tool-call", callId, name, input: clip(input, BODY_LIMIT) }],
       );
     };
     const callAndResult = (name: string, input: string, ok: boolean | null, output: string): Parsed => {
       const opened = call(name, input);
       if (!completed) return opened;
-      return parsed(opened.facts, [
+      return parsed([...opened.facts, callEnded(this.agent, callId, null)], [
         ...opened.items,
         { id: itemId(offset, 1), at: null, kind: "tool-result", callId, ok, output: clip(output, BODY_LIMIT) },
       ]);
@@ -238,6 +245,7 @@ function laneRecord(path: string, id: AgentId, record: Partial<LaneRecord>): Par
   }
   const label = text(record.label);
   const started = text(record.startedAt);
+  const head = text(record.promptHead);
   const startedMs = started === null ? Number.NaN : Date.parse(started);
   const facts: Fact[] = [
     {
@@ -253,8 +261,11 @@ function laneRecord(path: string, id: AgentId, record: Partial<LaneRecord>): Par
         ...(text(record.cwd) !== null ? { cwd: text(record.cwd)! } : {}),
         ...(started !== null ? { seenAt: started } : {}),
         ...(label !== null ? { title: oneLine(label, 120) } : {}),
+        ...(head !== null ? { titleHint: oneLine(head, 80) } : {}),
       },
     },
+    // Only pstack's runner writes a lane record.
+    { kind: "pstack", id },
     {
       kind: "process",
       key: path,
@@ -262,6 +273,7 @@ function laneRecord(path: string, id: AgentId, record: Partial<LaneRecord>): Par
       process: { pid, startedAtMs: Number.isFinite(startedMs) ? startedMs : null, state: "running" },
     },
   ];
+  if (head !== null) facts.push(promptFact(id, head, started));
   const session = text(record.parentSessionId);
   if (session !== null) facts.push({ kind: "link", id, parent: `${parent}:${session}` as AgentId, via: "runner" });
   return parsed(facts);

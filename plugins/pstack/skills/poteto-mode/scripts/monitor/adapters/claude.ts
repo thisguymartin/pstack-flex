@@ -26,8 +26,11 @@ import {
 import {
   assistantBlocks,
   BODY_LIMIT,
+  callEnded,
   collected,
   itemId,
+  promptFact,
+  PSTACK_PREFIX,
   toolResult,
 } from "./blocks.ts";
 
@@ -72,6 +75,17 @@ const RESULT_STATUS: Record<string, ChildOutcome> = {
   killed: "cancelled",
   cancelled: "cancelled",
 };
+
+/** Claude Code turns never overlap within one transcript, so one id serves them all. */
+const TURN = "turn";
+
+const TURN_ENDS = new Set(["end_turn", "stop_sequence"]);
+
+function pstackAttribution(record: Record<string, unknown>): boolean {
+  return text(record.attributionPlugin) === "pstack"
+    || text(record.attributionSkill)?.startsWith(PSTACK_PREFIX) === true
+    || text(record.attributionAgent)?.startsWith(PSTACK_PREFIX) === true;
+}
 
 type Location =
   | { readonly kind: "session"; readonly session: string }
@@ -199,6 +213,13 @@ class TranscriptParser implements LineParser {
       out.facts.push({ kind: "usage", id: this.agent, key: text(message.id) ?? `${offset}`, usage });
     }
     assistantBlocks(this.agent, offset, at, message.content, out);
+    if (pstackAttribution(record) && !out.facts.some((fact) => fact.kind === "pstack")) {
+      out.facts.push({ kind: "pstack", id: this.agent });
+    }
+    // Partial records carry a null stop reason and `tool_use` waits on results; only these end the turn.
+    if (TURN_ENDS.has(text(message.stop_reason) ?? "")) {
+      out.facts.push({ kind: "turn", id: this.agent, turnId: TURN, at, event: { kind: "ended", outcome: "done", reason: null } });
+    }
     for (const block of array(message.content)) {
       const call = object(block);
       if (call?.type !== "tool_use" || call.name !== "SendMessage") continue;
@@ -251,7 +272,13 @@ class TranscriptParser implements LineParser {
       }
     }
 
-    if (record.isMeta === true) return parsed(facts, items, cliVersion);
+    if (record.isMeta === true) {
+      for (const block of array(content)) {
+        const callId = text(object(block)?.tool_use_id);
+        if (object(block)?.type === "tool_result" && callId !== null) facts.push(callEnded(this.agent, callId, at));
+      }
+      return parsed(facts, items, cliVersion);
+    }
 
     if (typeof content === "string") {
       this.prompt(content, offset, 0, at, facts, items);
@@ -263,6 +290,7 @@ class TranscriptParser implements LineParser {
       if (block.type === "tool_result") {
         const item = toolResult(offset, index, at, block);
         if (item !== null) items.push(item);
+        if (item?.kind === "tool-result") facts.push(callEnded(this.agent, item.callId, at));
       } else if (block.type === "text") {
         const body = text(block.text);
         if (body !== null) this.prompt(body, offset, index, at, facts, items);
@@ -284,15 +312,22 @@ class TranscriptParser implements LineParser {
     const command = tag(body, "command-name");
     if (command !== null) {
       items.push({ id: itemId(offset, index), at, kind: "notice", level: "info", text: `ran ${oneLine(command, 80)}` });
+      // No turn: a built-in command such as /model gets no reply that would close it.
+      if (command.replace(/^\//, "").startsWith(PSTACK_PREFIX)) facts.push({ kind: "pstack", id: this.agent });
       return;
     }
     if (body.startsWith("<local-command") || body.startsWith("<system-reminder>")) return;
     if (body.startsWith("[Request interrupted")) {
       items.push({ id: itemId(offset, index), at, kind: "notice", level: "info", text: "interrupted by the user" });
+      facts.push({ kind: "turn", id: this.agent, turnId: TURN, at, event: { kind: "ended", outcome: "cancelled", reason: "interrupted by the user" } });
       return;
     }
     items.push({ id: itemId(offset, index), at, kind: "prompt", body: clip(body, BODY_LIMIT) });
-    facts.push({ kind: "agent", id: this.agent, patch: { titleHint: oneLine(body, 80) } });
+    facts.push(
+      { kind: "agent", id: this.agent, patch: { titleHint: oneLine(body, 80) } },
+      { kind: "turn", id: this.agent, turnId: TURN, at, event: { kind: "started" } },
+      promptFact(this.agent, body, at),
+    );
   }
 }
 
@@ -393,6 +428,7 @@ export function claudeAdapter(home: string): Adapter {
       } else if (text(record.teamName) !== null) {
         facts.push({ kind: "link", id, parent: root, via: "team" });
       }
+      if (text(record.agentType)?.startsWith(PSTACK_PREFIX) === true) facts.push({ kind: "pstack", id });
       if (record.stoppedByUser === true) {
         facts.push({ kind: "outcome", id, outcome: "cancelled", at: null, reason: "stopped by the user" });
       }

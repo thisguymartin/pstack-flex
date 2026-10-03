@@ -96,6 +96,34 @@ describe("rollout", () => {
     expect(prompt.facts[0]).toMatchObject({ patch: { titleHint: "Run the arena" } });
   });
 
+  it("reports the call awaiting output and the prompt being worked on", () => {
+    const parser = adapter.open(rollout(parentThread));
+    parser.line(record(0, "session_meta", { id: parentThread, cwd: "/repo", source: "cli", cli_version: "0.160.0" }), 0);
+    const call = parser.line(record(1, "response_item", { type: "function_call", name: "exec_command", arguments: '{"cmd":"bun test"}', call_id: "c1" }), 1);
+    expect(call.facts).toContainEqual(expect.objectContaining({ kind: "call", callId: "c1", event: expect.objectContaining({ kind: "started", name: "exec_command" }) }));
+    const output = parser.line(record(2, "response_item", { type: "function_call_output", call_id: "c1", output: "ok" }), 2);
+    expect(output.facts).toContainEqual(expect.objectContaining({ kind: "call", callId: "c1", event: { kind: "ended" } }));
+    const prompt = parser.line(record(3, "response_item", { type: "message", role: "user", content: [{ type: "input_text", text: "Run the arena" }] }), 3);
+    expect(prompt.facts).toContainEqual({ kind: "prompt", id: `codex:${parentThread}`, text: "Run the arena", at: "2026-10-01T10:00:00.000Z" } as never);
+  });
+
+  it("flags pstack from a root prompt or a call into pstack's skills or runner", () => {
+    const flagged = (thread: string, meta: string, line: string) => {
+      const parser = adapter.open(rollout(thread));
+      parser.line(meta, 0);
+      return parser.line(line, 1).facts.some((fact) => fact.kind === "pstack");
+    };
+    const rootMeta = record(0, "session_meta", { id: parentThread, cwd: "/repo", source: "cli", cli_version: "0.160.0" });
+    const ask = (text: string) => record(1, "response_item", { type: "message", role: "user", content: [{ type: "input_text", text }] });
+    const shell = (cmd: string) => record(1, "response_item", { type: "function_call", name: "exec_command", arguments: JSON.stringify({ cmd }), call_id: "c1" });
+    expect(flagged(parentThread, rootMeta, ask("Use pstack:monitor."))).toBe(true);
+    expect(flagged(parentThread, rootMeta, ask("Fix the parser"))).toBe(false);
+    expect(flagged(childThread, childMeta(), ask("Use pstack:monitor."))).toBe(false);
+    expect(flagged(parentThread, rootMeta, shell("pstack-runner --parent codex --provider minimax"))).toBe(true);
+    expect(flagged(parentThread, rootMeta, shell("cat ~/.codex/plugins/cache/open-pstack/pstack/1.5.0/skills/arena/SKILL.md"))).toBe(true);
+    expect(flagged(parentThread, rootMeta, shell("ls"))).toBe(false);
+  });
+
   it("records each agent message once, addressed by path, and names the tree's root path", () => {
     const parser = adapter.open(rollout(childThread));
     const meta = parser.line(childMeta(), 0);

@@ -52,6 +52,18 @@ export interface Activity {
   readonly at: string | null;
 }
 
+export interface Prompt {
+  readonly text: string;
+  readonly at: string | null;
+}
+
+/** A tool call still waiting for its result. */
+export interface PendingCall {
+  readonly name: string;
+  readonly snippet: string;
+  readonly since: string | null;
+}
+
 export interface AgentNode {
   readonly id: AgentId;
   // May name an agent outside the indexed window; the client then draws this node as a root.
@@ -69,6 +81,10 @@ export interface AgentNode {
   readonly startedAt: string | null;
   readonly lastActivityAt: string | null;
   readonly activity: Activity | null;
+  /** True when any agent in this node's spawn tree is pstack work. */
+  readonly pstack: boolean;
+  readonly prompt: Prompt | null;
+  readonly pending: PendingCall | null;
   readonly usage: NormalizedUsage | null;
   readonly health: Health;
 }

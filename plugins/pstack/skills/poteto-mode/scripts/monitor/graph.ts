@@ -1,4 +1,5 @@
 import type { AgentId, AgentNode, NormalizedUsage } from "./domain.ts";
+import { working } from "./format.ts";
 
 // pstack-flex addition. Pure tree helpers shared by the browser and tests.
 
@@ -20,8 +21,8 @@ export interface Counts {
 }
 
 /** Working now, or idle in a process known to be alive. A turn boundary alone proves nothing. */
-export function isLive(node: AgentNode): boolean {
-  return node.status.kind === "running" || (node.status.kind === "idle" && node.status.evidence === "pid");
+export function isLive(node: AgentNode, now = Date.now()): boolean {
+  return working(node, now) || (node.status.kind === "idle" && node.status.evidence === "pid");
 }
 
 function byStart(a: AgentNode, b: AgentNode): number {
@@ -40,11 +41,11 @@ export function parentOf(node: AgentNode, nodes: ReadonlyMap<AgentId, AgentNode>
 }
 
 /** Sessions to list: live ones first, then most recently active. */
-export function rootsOf(nodes: ReadonlyMap<AgentId, AgentNode>): AgentNode[] {
+export function rootsOf(nodes: ReadonlyMap<AgentId, AgentNode>, now = Date.now()): AgentNode[] {
   return [...nodes.values()]
     .filter((node) => parentOf(node, nodes) === null)
     .sort((a, b) => {
-      const live = Number(isLive(b)) - Number(isLive(a));
+      const live = Number(isLive(b, now)) - Number(isLive(a, now));
       if (live !== 0) return live;
       const left = recency(a);
       const right = recency(b);
@@ -94,7 +95,7 @@ export function tokenTotal(usage: NormalizedUsage | null): number {
   return (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
 }
 
-export function countsOf(tree: Tree): Counts {
+export function countsOf(tree: Tree, now = Date.now()): Counts {
   let running = 0;
   let waiting = 0;
   let done = 0;
@@ -105,7 +106,7 @@ export function countsOf(tree: Tree): Counts {
     if (node === tree.root) continue;
     switch (node.status.kind) {
       case "running":
-        running += 1;
+        if (working(node, now)) running += 1;
         break;
       case "idle":
         waiting += 1;
