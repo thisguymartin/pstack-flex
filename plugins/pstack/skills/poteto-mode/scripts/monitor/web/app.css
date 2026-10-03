@@ -275,6 +275,7 @@ code {
 }
 .stat[data-kind="running"] b { color: var(--accent-strong); }
 .stat[data-kind="failed"][data-zero="false"] b { color: var(--failed); }
+.stat[data-kind="waiting"][data-zero="false"] b { color: var(--attention); }
 .stat[data-zero="true"] { color: var(--text-3); }
 .stat[data-zero="true"] b { color: var(--text-3); font-weight: 500; }
 
@@ -323,7 +324,19 @@ code {
   padding: 14px 16px 4px;
 }
 
+.rail-names { display: flex; align-items: center; gap: 8px; }
 .rail-title { font-size: 12.5px; font-weight: 650; }
+
+.rail-scope {
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 11.5px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.rail-scope:hover { color: var(--text); border-color: var(--line-strong); }
+.rail-group[hidden] { display: none; }
 
 .rail-count {
   padding: 1px 7px;
@@ -426,8 +439,11 @@ code {
   border-radius: 50%;
   border: 1.5px solid var(--text-3);
 }
-.session[data-status="running"] .session-dot { --beacon: var(--p); background: var(--p); border-color: var(--p); animation: beacon 2.2s ease-out infinite; }
-.session[data-status="idle"][data-evidence="pid"] .session-dot { background: var(--done); border-color: var(--done); }
+.session[data-group="working"] .session-dot { --beacon: var(--p); background: var(--p); border-color: var(--p); animation: beacon 2.2s ease-out infinite; }
+.session[data-group="open"] .session-dot { border-color: var(--p); }
+.session[data-group="earlier"] .session-dot { border-color: var(--text-3); opacity: 0.6; }
+.session[data-status="failed"] .session-dot { background: var(--failed); border-color: var(--failed); opacity: 1; }
+.session[data-group="working"] .session-meta { color: var(--text-2); }
 
 .rail-empty { margin: 0; padding: 12px 8px; font-size: 12.5px; color: var(--text-3); }
 
@@ -594,7 +610,7 @@ code {
   top: 0;
   left: 0;
   width: 264px;
-  height: 64px;
+  height: 84px;
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr) 22px;
   align-items: center;
@@ -621,12 +637,12 @@ code {
 }
 .card[data-kind="session"] {
   width: 304px;
-  height: 80px;
+  height: 100px;
   grid-template-columns: 48px minmax(0, 1fr) 22px;
   padding-left: 16px;
-  border-radius: 40px 16px 16px 40px;
+  border-radius: 50px 16px 16px 50px;
 }
-.card[data-kind="session"]:focus-visible { border-radius: 40px 16px 16px 40px; }
+.card[data-kind="session"]:focus-visible { border-radius: 50px 16px 16px 50px; }
 .card[data-status="running"] {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.04),
@@ -663,6 +679,12 @@ code {
   opacity: 1;
   animation: sweep 2.6s linear infinite;
 }
+/* Running but silent: still alive, nothing recent to show. */
+.card[data-quiet="quiet"] .card-ring { opacity: 0.35; }
+/* A turn that never ended: nothing proves it still runs. */
+.card[data-quiet="stalled"] .card-ring { opacity: 0; animation: none; }
+.card[data-quiet="stalled"] .card-badge .icon { animation: none; }
+.card[data-quiet="stalled"] .card-status { color: var(--attention); }
 
 .card-glyph {
   width: 40px;
@@ -722,6 +744,18 @@ code {
 .card[data-status="failed"] .card-status { color: var(--failed); }
 .card[data-attention="true"] .card-status { color: var(--attention); }
 
+.card-activity {
+  min-width: 0;
+  font: 11px/1.4 var(--font-mono);
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-activity[hidden] { display: none; }
+.card[data-status="running"] .card-activity { color: var(--text-2); }
+.card[data-pending="true"][data-status="running"] .card-activity { color: var(--text); }
+
 .card-badge {
   width: 22px;
   height: 22px;
@@ -736,6 +770,9 @@ code {
 .card[data-status="done"] .card-badge { color: var(--done); background: color-mix(in oklab, var(--done) 16%, transparent); }
 .card[data-status="failed"] .card-badge { color: var(--failed); background: color-mix(in oklab, var(--failed) 18%, transparent); }
 .card[data-status="idle"] .card-badge { color: var(--text-2); }
+.card[data-status="idle"][data-evidence="pid"] .card-badge { color: var(--accent-strong); background: var(--accent-soft); }
+.card[data-status="ended"] .card-badge,
+.card[data-status="cancelled"] .card-badge { color: var(--text-3); background: var(--layer-2); }
 .card[data-attention="true"] .card-badge { color: var(--attention); background: color-mix(in oklab, var(--attention) 16%, transparent); }
 
 .port {
@@ -864,6 +901,15 @@ code {
 .empty .logo { width: 52px; height: 52px; margin-bottom: 6px; }
 .empty h2 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.01em; text-wrap: balance; }
 .empty p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text-2); text-wrap: pretty; }
+.empty-action {
+  margin-top: 4px;
+  padding: 6px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 550;
+}
+.empty-action:hover { border-color: var(--accent); color: var(--accent-strong); }
 
 .canvas-hint {
   max-width: 420px;
@@ -908,7 +954,7 @@ code {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 460px;
+  width: var(--panel-width, 460px);
   max-width: 100%;
   display: flex;
   flex-direction: column;
@@ -926,8 +972,76 @@ code {
   transition: translate 0.34s var(--ease-out), visibility 0s, background-color 0.4s ease;
 }
 
+.panel[data-resizing="true"] { transition: none; user-select: none; }
+
+.panel-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 1;
+}
+.panel-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4.5px;
+  width: 1px;
+  background: transparent;
+  transition: background-color 0.15s;
+}
+.panel-resizer:hover::after,
+.panel-resizer:focus-visible::after,
+.panel[data-resizing="true"] .panel-resizer::after { width: 2px; background: var(--accent); }
+.panel-resizer:focus-visible { outline: none; }
+
+.panel-actions { display: flex; gap: 2px; }
+.panel-widen[aria-pressed="true"] { color: var(--accent-strong); }
+
+.panel-label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.panel-task-text {
+  margin: 0;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--layer-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.panel-now-text {
+  display: block;
+  font: 12px/1.45 var(--font-mono);
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.panel-now[data-pending="true"] .panel-now-text { color: var(--text); }
+.panel-task[hidden],
+.panel-now[hidden] { display: none; }
+
 .panel-head {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   padding: 18px 20px 16px;
   border-bottom: 1px solid var(--line);
@@ -993,11 +1107,20 @@ code {
   border-color: color-mix(in oklab, var(--accent) 35%, transparent);
 }
 .status-chip[data-status="running"] .icon { animation: spin 0.9s linear infinite; }
+.status-chip[data-stalled="true"] { color: var(--attention); background: var(--layer-2); border-color: var(--line); }
+.status-chip[data-stalled="true"] .icon { animation: none; }
 .status-chip[data-status="done"] {
   color: var(--done);
   background: color-mix(in oklab, var(--done) 12%, transparent);
   border-color: color-mix(in oklab, var(--done) 30%, transparent);
 }
+.status-chip[data-status="idle"] {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+.status-chip[data-status="ended"],
+.status-chip[data-status="cancelled"] { color: var(--text-3); }
+.status-chip[data-status="unknown"] { border-style: dashed; }
 .status-chip[data-status="failed"] {
   color: var(--failed);
   background: color-mix(in oklab, var(--failed) 12%, transparent);
@@ -1383,6 +1506,8 @@ code {
   }
   body[data-rail="open"] .scrim { opacity: 1; pointer-events: auto; }
   .panel { width: 100%; border-left: 0; }
+  .panel-resizer,
+  .panel-widen { display: none; }
   .controls { left: 10px; bottom: 10px; }
 }
 

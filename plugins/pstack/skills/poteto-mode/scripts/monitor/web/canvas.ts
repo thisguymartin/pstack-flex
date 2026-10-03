@@ -1,5 +1,5 @@
 import type { AgentId, AgentNode, AgentStatus, MessageLink } from "../domain.ts";
-import { kindLabel, modelOf, statusLine } from "../format.ts";
+import { activityLine, kindLabel, modelOf, quietFor, stalled, statusLine } from "../format.ts";
 import type { Tree } from "../graph.ts";
 import { connector, layout, messageArc, type Bounds, type Layout } from "../layout.ts";
 import { h, icon, providerIcon, svgElement, type IconName } from "./dom.ts";
@@ -17,6 +17,10 @@ const STATUS_ICON: Record<AgentStatus["kind"], IconName> = {
   unknown: "question",
 };
 
+function quietness(node: AgentNode, now: number): "stalled" | "quiet" | "no" {
+  return stalled(node, now) ? "stalled" : quietFor(node, now) !== null ? "quiet" : "no";
+}
+
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 1.75;
 const FIT_PADDING = 72;
@@ -33,6 +37,7 @@ interface View {
   readonly title: HTMLElement;
   readonly kind: HTMLElement;
   readonly status: HTMLElement;
+  readonly activity: HTMLElement;
   readonly badge: HTMLElement;
   satellite: HTMLElement | null;
   tether: SVGGElement | null;
@@ -163,9 +168,10 @@ export class Canvas {
     this.empty.toggleAttribute("hidden", content === null);
   }
 
-  setRightInset(pixels: number): void {
+  /** `reveal: false` while a drag is still changing the inset, so the camera does not chase it. */
+  setRightInset(pixels: number, reveal = true): void {
     this.rightInset = pixels;
-    if (this.selected !== null) this.reveal(this.selected);
+    if (reveal && this.selected !== null) this.reveal(this.selected);
   }
 
   render(tree: Tree | null, selected: AgentId | null, now: number, links: readonly MessageLink[] = []): void {
@@ -274,6 +280,7 @@ export class Canvas {
     for (const view of this.views.values()) {
       if (view.node.status.kind === "running" || view.node.status.kind === "idle") {
         view.status.textContent = statusLine(view.node, now);
+        view.card.dataset.quiet = quietness(view.node, now);
       }
     }
   }
@@ -496,6 +503,7 @@ export class Canvas {
     const title = h("span", { class: "card-title" });
     const kind = h("span", { class: "card-kind" });
     const status = h("span", { class: "card-status" });
+    const activity = h("span", { class: "card-activity" });
     const badge = h("span", { class: "card-badge", attrs: { "aria-hidden": "true" } });
     const card = h(
       "button",
@@ -503,7 +511,7 @@ export class Canvas {
       h("span", { class: "card-ring", attrs: { "aria-hidden": "true" } }),
       h("span", { class: "port port-in", attrs: { "aria-hidden": "true" } }),
       glyph,
-      h("span", { class: "card-text" }, title, h("span", { class: "card-meta" }, kind, h("span", { class: "card-sep", text: "·" }), status)),
+      h("span", { class: "card-text" }, title, h("span", { class: "card-meta" }, kind, h("span", { class: "card-sep", text: "·" }), status), activity),
       badge,
       h("span", { class: "port port-out", attrs: { "aria-hidden": "true" } }),
     );
@@ -516,6 +524,7 @@ export class Canvas {
       title,
       kind,
       status,
+      activity,
       badge,
       satellite: null,
       tether: null,
@@ -542,12 +551,17 @@ export class Canvas {
     card.dataset.harness = node.harness;
     card.dataset.health = node.health;
     card.dataset.attention = String(status.kind === "idle" && status.detail !== null);
-    card.dataset.evidence = status.kind === "running" ? status.evidence : "";
+    card.dataset.evidence = status.kind === "running" || status.kind === "idle" ? status.evidence : "";
+    card.dataset.quiet = quietness(node, now);
+    card.dataset.pending = String(node.pending !== null);
     card.setAttribute("aria-pressed", String(selected));
     view.title.textContent = node.title;
     // The root's glyph already names the harness; its card needs only a short label.
     view.kind.textContent = node.flavor.kind === "session" ? (node.harness === "claude" ? "Claude Code" : "Codex") : kindLabel(node);
     view.status.textContent = statusLine(node, now);
+    const doing = activityLine(node);
+    view.activity.textContent = doing ?? "";
+    view.activity.hidden = doing === null;
     card.setAttribute("aria-label", `${node.title}, ${kindLabel(node)}, ${statusLine(node, now)}`);
     card.title = node.title;
     const glyphName = node.flavor.kind === "session" ? providerIcon(node.harness) : providerIcon(node.model.provider);

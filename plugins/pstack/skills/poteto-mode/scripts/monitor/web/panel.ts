@@ -1,5 +1,5 @@
 import type { AgentId, AgentNode, Clipped, MessageLink, TimelineItem } from "../domain.ts";
-import { clockTime, compactNumber, duration, kindLabel, modelOf, prettyModel, shortPath, statusLine, summarizeInput } from "../format.ts";
+import { activityLine, ago, stalled, clockTime, compactNumber, duration, kindLabel, modelOf, prettyModel, shortPath, statusLine, summarizeInput } from "../format.ts";
 import type { TimelinePage } from "../wire.ts";
 import { h, icon, providerIcon, toolIcon, type IconName } from "./dom.ts";
 
@@ -9,11 +9,36 @@ import { h, icon, providerIcon, toolIcon, type IconName } from "./dom.ts";
 const STICK_THRESHOLD = 40;
 const LOAD_OLDER_THRESHOLD = 160;
 const CLAMP_CHARS = 700;
+export const PANEL_MIN = 360;
+export const PANEL_DEFAULT = 460;
+const PANEL_WIDE = 760;
+const KEY_STEP = 24;
+const WIDTH_KEY = "pstack-monitor.panel-width";
 
 export interface PanelEvents {
   close(): void;
   select(id: AgentId): void;
   loadOlder(agent: AgentId, before: number): Promise<TimelinePage | null>;
+  /** `settled` is false while a drag is still moving. */
+  resized(width: number, settled: boolean): void;
+}
+
+function storedWidth(): number {
+  try {
+    const value = Number(localStorage.getItem(WIDTH_KEY));
+    return Number.isFinite(value) && value >= PANEL_MIN ? value : PANEL_DEFAULT;
+  } catch {
+    return PANEL_DEFAULT;
+  }
+}
+
+function storeWidth(width: number | null): void {
+  try {
+    if (width === null) localStorage.removeItem(WIDTH_KEY);
+    else localStorage.setItem(WIDTH_KEY, String(Math.round(width)));
+  } catch {
+    // Storage is unavailable; the width lasts for this page only.
+  }
 }
 
 type ToolCall = Extract<TimelineItem, { kind: "tool-call" }>;
@@ -43,7 +68,15 @@ export class Panel {
   private readonly kind: HTMLElement;
   private readonly chip: HTMLElement;
   private readonly facts: HTMLElement;
+  private readonly task: HTMLElement;
+  private readonly taskText: HTMLElement;
+  private readonly now: HTMLElement;
+  private readonly nowLabel: HTMLElement;
+  private readonly nowText: HTMLElement;
   private readonly note: HTMLElement;
+  private readonly widen: HTMLButtonElement;
+  private preferred = storedWidth();
+  private maxWidth = Number.POSITIVE_INFINITY;
   private readonly scroller: HTMLElement;
   private readonly list: HTMLOListElement;
   private readonly olderButton: HTMLButtonElement;
@@ -65,9 +98,22 @@ export class Panel {
     this.kind = h("p", { class: "panel-kind" });
     this.chip = h("p", { class: "status-chip" });
     this.facts = h("dl", { class: "facts" });
+    this.taskText = h("p", { class: "panel-task-text" });
+    this.task = h("div", { class: "panel-task", attrs: { hidden: "" } }, h("span", { class: "panel-label", text: "Task" }), this.taskText);
+    this.nowLabel = h("span", { class: "panel-label" });
+    this.nowText = h("span", { class: "panel-now-text" });
+    this.now = h("div", { class: "panel-now", attrs: { hidden: "" } }, this.nowLabel, this.nowText);
     this.note = h("p", { class: "panel-note", attrs: { hidden: "" } });
     const close = h("button", { class: "icon-button", title: "Close", attrs: { type: "button", "aria-label": "Close agent details" } }, icon("close"));
     close.addEventListener("click", () => this.events.close());
+    this.widen = h("button", { class: "icon-button panel-widen", title: "Widen", attrs: { type: "button", "aria-label": "Widen panel", "aria-pressed": "false" } }, icon("widen"));
+    this.widen.addEventListener("click", () => this.setWidth(this.width >= PANEL_WIDE ? PANEL_DEFAULT : PANEL_WIDE, true));
+    const resizer = h("div", {
+      class: "panel-resizer",
+      title: "Drag to resize; double-click to reset",
+      attrs: { role: "separator", "aria-orientation": "vertical", "aria-label": "Resize panel", tabindex: "0" },
+    });
+    this.bindResizer(resizer);
     this.olderButton = h("button", { class: "older", text: "Load earlier activity", attrs: { type: "button", hidden: "" } });
     this.olderButton.addEventListener("click", () => void this.loadOlder());
     this.list = h("ol", { class: "timeline-items" });
@@ -79,11 +125,14 @@ export class Panel {
     this.element = h(
       "aside",
       { class: "panel", attrs: { "aria-labelledby": "panel-title", "data-open": "false" } },
+      resizer,
       h(
         "header",
         { class: "panel-head" },
-        h("div", { class: "panel-identity" }, this.glyph, h("div", { class: "panel-names" }, this.title, this.kind), close),
+        h("div", { class: "panel-identity" }, this.glyph, h("div", { class: "panel-names" }, this.title, this.kind), h("div", { class: "panel-actions" }, this.widen, close)),
         this.chip,
+        this.task,
+        this.now,
         this.facts,
         this.note,
       ),
@@ -94,6 +143,65 @@ export class Panel {
 
   get current(): AgentId | null {
     return this.agent?.id ?? null;
+  }
+
+  get width(): number {
+    return Math.max(PANEL_MIN, Math.min(this.preferred, this.maxWidth));
+  }
+
+  /** Keeps the panel from covering the whole stage; called when the window resizes. */
+  setMaxWidth(pixels: number): void {
+    this.maxWidth = Math.max(PANEL_MIN, pixels);
+    this.applyWidth();
+  }
+
+  private setWidth(pixels: number | null, settled: boolean): void {
+    this.preferred = pixels ?? PANEL_DEFAULT;
+    if (settled) storeWidth(pixels === null ? null : this.width);
+    this.applyWidth();
+    this.events.resized(this.width, settled);
+  }
+
+  private applyWidth(): void {
+    this.element.style.setProperty("--panel-width", `${this.width}px`);
+    this.widen.setAttribute("aria-pressed", String(this.width >= PANEL_WIDE));
+  }
+
+  private bindResizer(resizer: HTMLElement): void {
+    let start: { x: number; width: number } | null = null;
+    let frame: number | null = null;
+    let next = 0;
+    resizer.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      resizer.setPointerCapture(event.pointerId);
+      start = { x: event.clientX, width: this.width };
+      this.element.dataset.resizing = "true";
+    });
+    resizer.addEventListener("pointermove", (event) => {
+      if (start === null) return;
+      next = start.width + start.x - event.clientX;
+      frame ??= requestAnimationFrame(() => {
+        frame = null;
+        this.setWidth(next, false);
+      });
+    });
+    const finish = (): void => {
+      if (start === null) return;
+      start = null;
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = null;
+      delete this.element.dataset.resizing;
+      this.setWidth(this.width, true);
+    };
+    resizer.addEventListener("pointerup", finish);
+    resizer.addEventListener("pointercancel", finish);
+    resizer.addEventListener("dblclick", () => this.setWidth(null, true));
+    resizer.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      this.setWidth(this.width + (event.key === "ArrowLeft" ? KEY_STEP : -KEY_STEP), true);
+    });
   }
 
   open(node: AgentNode, nodes: ReadonlyMap<AgentId, AgentNode>, now: number): void {
@@ -112,6 +220,7 @@ export class Panel {
       this.jump.hidden = true;
     }
     this.element.dataset.open = "true";
+    this.applyWidth();
     this.renderHeader(now);
   }
 
@@ -166,7 +275,21 @@ export class Panel {
     this.title.textContent = node.title;
     this.kind.textContent = kindLabel(node);
     this.chip.dataset.status = node.status.kind;
+    this.chip.dataset.stalled = String(stalled(node, now));
     this.chip.replaceChildren(icon(statusIcon(node)), h("span", { text: statusLine(node, now) }));
+
+    this.task.hidden = node.prompt === null;
+    this.taskText.textContent = node.prompt?.text ?? "";
+    this.taskText.title = node.prompt?.text ?? "";
+    const running = node.status.kind === "running" && !stalled(node, now);
+    const doing = activityLine(node);
+    const since = node.pending?.since ?? node.activity?.at ?? null;
+    const age = since === null ? "" : ago(since, now);
+    this.now.hidden = doing === null;
+    this.now.dataset.pending = String(node.pending !== null && running);
+    this.nowLabel.textContent = running ? "Now" : "Last";
+    this.nowText.textContent = doing === null ? "" : age.length > 0 ? `${doing} · ${age}` : doing;
+    this.nowText.title = doing ?? "";
 
     const rows: [string, Node | string][] = [];
     const model = modelOf(node);
@@ -199,10 +322,7 @@ export class Panel {
 
     const notes: string[] = [];
     if (node.status.kind === "unknown") notes.push(capitalize(node.status.why));
-    if (node.flavor.kind === "lane" && node.flavor.stream === "at-exit") {
-      notes.push("This CLI reports its whole response when it exits, so activity appears at the end.");
-    }
-    if (node.health === "degraded") notes.push("Some of this agent's records are in a shape the monitor does not recognize.");
+    if (node.health === "degraded") notes.push("Some records were not recognized.");
     this.note.textContent = notes.join(" ");
     this.note.hidden = notes.length === 0;
   }
@@ -249,8 +369,8 @@ export class Panel {
     this.olderButton.hidden = this.older === null;
     this.emptyNote.hidden = rows.length > 0;
     this.emptyNote.textContent = node.flavor.kind === "lane" && node.flavor.stream === "at-exit"
-      ? "Waiting for this lane to finish; its CLI prints everything at exit."
-      : "No activity recorded for this agent yet.";
+      ? "The reply arrives when the lane exits."
+      : "No activity yet.";
     if (prepended) this.scroller.scrollTop += this.scroller.scrollHeight - previousHeight;
   }
 

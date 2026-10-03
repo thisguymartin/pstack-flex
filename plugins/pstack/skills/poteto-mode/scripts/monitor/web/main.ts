@@ -1,11 +1,11 @@
 import type { AgentId, AgentNode, Harness, MessageLink, SourceKind } from "../domain.ts";
-import { compactNumber, shortPath } from "../format.ts";
+import { compactNumber, shortPath, working } from "../format.ts";
 import { countsOf, isLive, rootOf, rootsOf, treeOf } from "../graph.ts";
 import type { Delta, ServerInfo, Snapshot, SourceHealth, TimelineAppend, TimelinePage } from "../wire.ts";
 import { Canvas } from "./canvas.ts";
 import { h, icon, logo } from "./dom.ts";
-import { Panel } from "./panel.ts";
-import { Rail, type Descendants } from "./rail.ts";
+import { Panel, PANEL_MIN } from "./panel.ts";
+import { Rail, type Descendants, type Scope } from "./rail.ts";
 
 // pstack-flex addition. The page controller: one event stream, one state,
 // and a render that every view reads from.
@@ -16,8 +16,11 @@ const SOURCE_NAME: Record<SourceKind, string> = {
   "runner-lane": "pstack lanes",
 };
 
-const PANEL_WIDTH = 460;
 const RETRY_MS = 3_000;
+/** Canvas kept visible beside the panel; narrower than this and the panel overlays it. */
+const CANVAS_MIN = 360;
+const PANEL_GUTTER = 240;
+const SCOPE_KEY = "pstack-monitor.scope";
 
 type Connection = "connecting" | "live" | "retrying" | "expired";
 
@@ -30,11 +33,21 @@ interface State {
   agent: AgentId | null;
   connection: Connection;
   dismissed: string;
+  scope: Scope;
 }
 
 const params = new URLSearchParams(location.search);
 const defaultHarness: Harness = params.get("harness") === "codex" ? "codex" : "claude";
 let pendingFocus = params.get("focus") as AgentId | null;
+
+function initialScope(): Scope {
+  if (params.get("all") === "1") return "all";
+  try {
+    return localStorage.getItem(SCOPE_KEY) === "all" ? "all" : "pstack";
+  } catch {
+    return "pstack";
+  }
+}
 
 const state: State = {
   nodes: new Map(),
@@ -45,15 +58,23 @@ const state: State = {
   agent: null,
   connection: "connecting",
   dismissed: "",
+  scope: initialScope(),
 };
+
+/** The agents the current scope shows: pstack's trees, or everything. */
+function visible(): Map<AgentId, AgentNode> {
+  if (state.scope === "all") return state.nodes;
+  return new Map([...state.nodes].filter(([, node]) => node.pstack));
+}
 
 const canvas = new Canvas({ select: (id) => selectAgent(id) });
 const panel = new Panel({
   close: () => selectAgent(null),
   select: (id) => selectAgent(id),
   loadOlder: (agent, before) => fetchTimeline(agent, before),
+  resized: (width, settled) => canvas.setRightInset(insetFor(width), settled),
 });
-const rail = new Rail({ select: (root) => selectSession(root) });
+const rail = new Rail({ select: (root) => selectSession(root), toggleScope: () => setScope(state.scope === "pstack" ? "all" : "pstack") });
 
 const sessionTitle = h("h1", { class: "bar-title" });
 const sessionPath = h("span", { class: "bar-path mono" });
@@ -136,8 +157,9 @@ function onSnapshot(snapshot: Snapshot): void {
   state.links = snapshot.links;
   state.health = snapshot.health;
   state.server = snapshot.server;
-  if (state.session === null || !state.nodes.has(state.session)) state.session = chooseSession();
-  if (state.agent !== null && !state.nodes.has(state.agent)) state.agent = null;
+  const shown = visible();
+  if (state.session === null || !shown.has(state.session)) state.session = chooseSession();
+  if (state.agent !== null && !shown.has(state.agent)) state.agent = null;
   setConnection("live");
   render();
 }
@@ -161,22 +183,37 @@ function onDelta(delta: Delta): void {
   }
   if (delta.health !== null) state.health = delta.health;
   if (state.server !== null) state.server = { ...state.server, indexing: delta.indexing };
-  if (state.session === null) state.session = chooseSession();
+  if (state.session === null || !visible().has(state.session)) state.session = chooseSession();
   render();
   for (const id of pulses) canvas.pulse(id);
   for (const link of talks) canvas.pulseMessage(link.from, link.to);
 }
 
 function chooseSession(): AgentId | null {
+  const shown = visible();
   if (pendingFocus !== null) {
     const focus = pendingFocus;
-    if (state.nodes.has(focus)) {
+    if (shown.has(focus)) {
       pendingFocus = null;
-      return rootOf(focus, state.nodes);
+      return rootOf(focus, shown);
     }
   }
-  const roots = rootsOf(state.nodes);
-  return (roots.find(isLive) ?? roots[0])?.id ?? null;
+  const now = Date.now();
+  const roots = rootsOf(shown, now);
+  return (roots.find((root) => isLive(root, now)) ?? roots[0])?.id ?? null;
+}
+
+function setScope(scope: Scope): void {
+  state.scope = scope;
+  try {
+    localStorage.setItem(SCOPE_KEY, scope);
+  } catch {
+    // Storage is unavailable; the choice lasts for this page only.
+  }
+  const shown = visible();
+  if (state.agent !== null && !shown.has(state.agent)) selectAgent(null);
+  if (state.session === null || !shown.has(state.session)) state.session = chooseSession();
+  render();
 }
 
 // --- selection -------------------------------------------------------------
@@ -202,20 +239,27 @@ function selectAgent(id: AgentId | null): void {
     render();
     return;
   }
-  const node = state.nodes.get(id);
+  const shown = visible();
+  const node = shown.get(id);
   if (node === undefined) return;
-  const root = rootOf(id, state.nodes);
+  const root = rootOf(id, shown);
   if (root !== state.session) state.session = root;
-  panel.open(node, state.nodes, Date.now());
+  panel.open(node, shown, Date.now());
   render();
-  canvas.setRightInset(wide() ? PANEL_WIDTH : 0);
+  canvas.setRightInset(insetFor(panel.width));
   canvas.reveal(id);
   // The stream carries the watched agent's timeline, so a new selection reconnects.
   connect();
 }
 
-function wide(): boolean {
-  return matchMedia("(min-width: 1100px)").matches;
+/** The panel overlays the canvas when keeping both side by side would leave the canvas too narrow. */
+function insetFor(width: number): number {
+  return stage.clientWidth - width >= CANVAS_MIN ? width : 0;
+}
+
+function fitPanel(): void {
+  panel.setMaxWidth(Math.max(PANEL_MIN, stage.clientWidth - PANEL_GUTTER));
+  canvas.setRightInset(state.agent === null ? 0 : insetFor(panel.width), false);
 }
 
 function toggleRail(open?: boolean): void {
@@ -228,18 +272,19 @@ function toggleRail(open?: boolean): void {
 
 function render(): void {
   const now = Date.now();
-  const roots = rootsOf(state.nodes);
+  const shown = visible();
+  const roots = rootsOf(shown, now);
   const descendants = new Map<AgentId, Descendants>();
-  for (const node of state.nodes.values()) {
-    const root = rootOf(node.id, state.nodes);
+  for (const node of shown.values()) {
+    const root = rootOf(node.id, shown);
     if (root === node.id) continue;
     const entry = descendants.get(root) ?? { total: 0, running: 0 };
-    descendants.set(root, { total: entry.total + 1, running: entry.running + (node.status.kind === "running" ? 1 : 0) });
+    descendants.set(root, { total: entry.total + 1, running: entry.running + (working(node, now) ? 1 : 0) });
   }
   const hours = state.server?.windowHours ?? 24;
-  rail.render(roots, descendants, state.session, now, `Showing the last ${hours === 24 ? "24 hours" : `${hours} hours`}`);
+  rail.render(roots, descendants, state.session, now, state.scope, `Last ${hours} hours`);
 
-  const tree = state.session === null ? null : treeOf(state.session, state.nodes);
+  const tree = state.session === null ? null : treeOf(state.session, shown);
   canvas.render(tree, state.agent, now, state.links);
   document.documentElement.dataset.harness = tree?.root.harness ?? defaultHarness;
 
@@ -249,14 +294,14 @@ function render(): void {
         "div",
         { class: "empty" },
         logo(),
-        h("h2", { text: "This link has expired" }),
-        h("p", {}, "The monitor restarted with a new access token. Run ", h("code", { text: "pstack-monitor start" }), " and open the link it prints."),
+        h("h2", { text: "Link expired" }),
+        h("p", {}, "Run ", h("code", { text: "pstack-monitor start" }), " and open the new link."),
       ),
     );
-  } else if (state.nodes.size === 0) {
-    canvas.setEmpty(emptyState(state.server?.indexing === true));
+  } else if (shown.size === 0) {
+    canvas.setEmpty(emptyState(state.server?.indexing === true, state.nodes.size > 0));
   } else if (tree !== null && tree.nodes.length === 1) {
-    canvas.setEmpty(h("p", { class: "canvas-hint", text: "No subagents in this session yet. When it spawns agents or runs pstack lanes, they appear here." }));
+    canvas.setEmpty(h("p", { class: "canvas-hint", text: "No agents spawned yet." }));
   } else {
     canvas.setEmpty(null);
   }
@@ -269,13 +314,14 @@ function render(): void {
     sessionTitle.textContent = tree.root.title;
     sessionPath.textContent = shortPath(tree.root.cwd);
     sessionPath.title = tree.root.cwd ?? "";
-    const counts = countsOf(tree);
+    const counts = countsOf(tree, now);
     const members = new Set(tree.nodes.map((node) => node.id));
     const messages = state.links
       .filter((link) => members.has(link.from) && members.has(link.to))
       .reduce((sum, link) => sum + link.count, 0);
     stats.replaceChildren(
       stat("running", counts.running, "running"),
+      stat("waiting", counts.waiting, "waiting"),
       stat("spawned", counts.spawned, counts.spawned === 1 ? "agent" : "agents"),
       stat("done", counts.done, "done"),
       stat("failed", counts.failed, "failed"),
@@ -285,7 +331,7 @@ function render(): void {
     document.title = counts.running > 0 ? `(${counts.running}) pstack monitor` : "pstack monitor";
   }
 
-  if (state.agent !== null) panel.update(state.nodes, now, state.links);
+  if (state.agent !== null) panel.update(shown, now, state.links);
   renderBanner();
   renderLive();
 }
@@ -294,17 +340,24 @@ function stat(kind: string, value: number, label: string, shown = String(value))
   return h("span", { class: "stat", attrs: { "data-kind": kind, "data-zero": String(value === 0) } }, h("b", { text: shown }), h("span", { text: ` ${label}` }));
 }
 
-function emptyState(indexing: boolean): HTMLElement {
+function emptyState(indexing: boolean, hidden: boolean): HTMLElement {
+  const hours = state.server?.windowHours ?? 24;
+  if (indexing) return h("div", { class: "empty" }, logo(), h("h2", { text: "Reading recent transcripts…" }));
+  const scoped = state.scope === "pstack";
+  const showAll = scoped && hidden
+    ? (() => {
+        const button = h("button", { class: "empty-action", text: "Show every session", attrs: { type: "button" } });
+        button.addEventListener("click", () => setScope("all"));
+        return button;
+      })()
+    : null;
   return h(
     "div",
     { class: "empty" },
     logo(),
-    h("h2", { text: indexing ? "Reading recent transcripts…" : `No agent activity in the last ${state.server?.windowHours ?? 24} hours` }),
-    h("p", {
-      text: indexing
-        ? "This takes a moment the first time."
-        : "Start a Claude Code or Codex session. It appears here as soon as it writes its first message, and every agent it spawns joins the graph.",
-    }),
+    h("h2", { text: scoped ? `No pstack sessions in the last ${hours} hours` : `No sessions in the last ${hours} hours` }),
+    h("p", { text: scoped ? "Run a pstack skill in Claude Code or Codex and it appears here." : "Start a Claude Code or Codex session and it appears here." }),
+    showAll,
   );
 }
 
@@ -314,7 +367,7 @@ function renderBanner(): void {
     if (!source.present) continue;
     const name = SOURCE_NAME[source.source];
     if (source.state === "degraded") {
-      messages.push(`${name}: ${source.shape} ${source.shape === 1 ? "record is" : "records are"} in a shape the monitor does not recognize, so some agents may be missing activity.`);
+      messages.push(`${name}: ${source.shape} unrecognized ${source.shape === 1 ? "record" : "records"}; some activity may be missing.`);
     } else if (source.unchecked.length > 0) {
       messages.push(`${name} ${source.unchecked.join(", ")} is newer than this monitor was checked against.`);
     }
@@ -352,7 +405,7 @@ function renderLive(): void {
     retrying: "Reconnecting…",
     expired: "Link expired",
   }[shown];
-  live.title = shown === "expired" ? "The monitor restarted. Run `pstack-monitor start` and open the new link." : "";
+  live.title = shown === "expired" ? "Run `pstack-monitor start` and open the new link." : "";
 }
 
 // --- clocks and keys -------------------------------------------------------
@@ -371,8 +424,6 @@ document.addEventListener("keydown", (event) => {
   else if (state.agent !== null) selectAgent(null);
 });
 
-matchMedia("(min-width: 1100px)").addEventListener("change", () => {
-  canvas.setRightInset(state.agent !== null && wide() ? PANEL_WIDTH : 0);
-});
+new ResizeObserver(() => fitPanel()).observe(stage);
 
 connect();

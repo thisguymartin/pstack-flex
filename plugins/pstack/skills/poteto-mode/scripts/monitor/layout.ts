@@ -6,9 +6,9 @@ import type { Tree } from "./graph.ts";
 // new child appends below its siblings instead of reshuffling the canvas.
 
 export const CARD_WIDTH = 264;
-export const CARD_HEIGHT = 64;
+export const CARD_HEIGHT = 84;
 export const ROOT_WIDTH = 304;
-export const ROOT_HEIGHT = 80;
+export const ROOT_HEIGHT = 100;
 export const COLUMN_GAP = 112;
 export const ROW_GAP = 24;
 /** Room under a card for its model node and label. */
