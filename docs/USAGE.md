@@ -220,75 +220,62 @@ Every external lane writes a JSON receipt next to its output. The fields that ma
 
 ## Watching your agents: the monitor
 
-The monitor is a local web page that draws every Claude Code and Codex session on this machine as a live graph. It shows the agents each session spawned, the external lanes pstack launched, and the messages they sent each other. Click any agent to read what it is doing.
+The monitor is a local web page that shows pstack work on this machine as a live graph. Each session that runs pstack appears with every agent it spawned: native Claude and Codex subagents, and external Codex, Grok, DeepSeek, and MiniMax lanes. Click an agent to see its task, what it is doing now, and its full activity.
 
-### It does not start by itself
+A session counts as pstack work once it runs a `/pstack:` command, a pstack skill, or a pstack agent (in Codex, a prompt that names pstack or a call into pstack's skills or runner). **Show all** in the session list, or `start --all`, shows every session instead.
 
-Nothing launches the monitor when a session starts or when you log in. Start it once. It then runs in the background, outside any session, until you stop it or restart the machine. Starting it while it already runs prints the same link again. After a plugin update, the next start replaces the old server with the new build.
+Status comes from evidence:
 
-### Start it
+| Shown | Meaning |
+| --- | --- |
+| working | the process is busy, or the agent is mid-turn |
+| waiting for input | the session's process is open and idle |
+| stalled | a turn started and has been silent for 15 minutes with no live process behind it |
+| quiet | still working, but nothing new for 90 seconds |
+| done, failed, cancelled | the agent or lane recorded an outcome |
+| ended · process gone | the process exited without an outcome |
 
-In Claude Code:
+### Start and stop
+
+Nothing starts the monitor for you. Start it once; it runs in the background until you stop it or restart the machine.
 
 ```text
-/pstack:monitor
+/pstack:monitor          # Claude Code
+Use pstack:monitor.      # Codex
 ```
 
-In Codex:
-
-```text
-Use pstack:monitor.
-```
-
-Either one prints a link such as `http://127.0.0.1:47317/?token=…`. Open it in your browser. The link carries an access token that is new each time the monitor starts, so an old link stops working after a restart.
-
-From a terminal, run the launcher inside the installed plugin. It needs Bun, which pstack's runner already uses.
+Either prints a link such as `http://127.0.0.1:47317/?token=…`. The token changes on every start. From a terminal, run the launcher inside the installed plugin (it needs Bun):
 
 ```shell
-# Claude Code install
 ~/.claude/plugins/cache/open-pstack/pstack/<version>/skills/poteto-mode/scripts/monitor/pstack-monitor start --parent claude
-
-# Codex install
 ~/.codex/plugins/cache/open-pstack/pstack/<version>/skills/poteto-mode/scripts/monitor/pstack-monitor start --parent codex
-
-# a checkout of this repository
-plugins/pstack/skills/poteto-mode/scripts/monitor/pstack-monitor start
 ```
 
-`--parent` picks the page's starting theme, orange for Claude Code and blue for Codex, and selects that harness's current session first. Other options: `--port <n>` (default 47317), `--hours <n>` for how far back the session list reaches (default 24), and `--focus <session id>`.
-
-### Stop it and other commands
+Options: `--all`, `--port <n>` (default 47317), `--hours <n>` (default 24), `--focus <session id>`.
 
 | Ask pstack | Or run | What happens |
 | --- | --- | --- |
-| "pstack, kill the monitor" | `pstack-monitor stop` | Stops the server. Your agents keep running; the monitor never stops an agent. |
-| "is the monitor running?" | `pstack-monitor status` | Prints agent counts and the link. |
-| | `pstack-monitor doctor` | Reports how well recent transcripts parsed, as counts only. |
-| | `pstack-monitor journal off` | Stops recording external lanes and deletes what was recorded. `on` and `status` also work. |
-
-To stop an agent itself, interrupt it in its own session, or cancel a pstack lane through the background task that launched it. The runner then writes a `cancelled` receipt.
+| "pstack, kill the monitor" | `pstack-monitor stop` | Stops the server. Agents keep running. |
+| "is the monitor running?" | `pstack-monitor status` | Prints counts and the link. |
+| | `pstack-monitor doctor` | Reports how well recent transcripts parsed. |
+| | `pstack-monitor journal off` | Stops recording lanes and deletes the records. |
 
 ### External lanes
 
-pstack runs some lanes outside the harness, such as a Codex cross-judge launched from Claude Code. Those lanes normally leave nothing on disk until they finish. The first `start` turns on the lane journal, which records each lane in `~/.pstack-flex/lanes/` as it runs, so the monitor can show it live. The journal keeps each lane for 7 days, readable only by you. Lanes that started before the journal was on do not appear.
+The first `start` turns on the lane journal in `~/.pstack-flex/lanes/`, kept for 7 days, so lanes show while they run. Codex and Grok lanes stream. Claude, DeepSeek, and MiniMax lanes show their reply when they exit. Lanes started while the journal was off do not appear.
 
-Codex and Grok lanes stream while they work. Claude, DeepSeek, and MiniMax lanes appear as soon as they start, but their reply arrives only when they finish, because those CLIs print one result at exit.
-
-### What it reads and writes
-
-It reads the transcripts Claude Code and Codex already keep in `~/.claude` and `~/.codex` (or `CLAUDE_CONFIG_DIR` and `CODEX_HOME`). It writes only its own record and log in `~/.pstack-flex/monitor/` and the lane journal. It adds no hook and changes no harness setting. It listens on `127.0.0.1` only and accepts no writes. `PSTACK_FLEX_MONITOR_DIR` and `PSTACK_FLEX_LANES_DIR` move its two directories.
+The monitor reads the transcripts in `~/.claude` and `~/.codex` (or `CLAUDE_CONFIG_DIR` and `CODEX_HOME`), writes only `~/.pstack-flex/monitor/` and the journal, listens on `127.0.0.1` only, and accepts no writes.
 
 ### When something looks wrong
 
-| Symptom | Meaning | Fix |
-| --- | --- | --- |
-| `port 47317 is unavailable` | another program uses the port | `pstack-monitor start --port 47400` |
-| The page says "This link has expired" | the monitor restarted, after an update or a reboot | run start again and open the new link |
-| Start fails inside a sandboxed session | the sandbox blocked the local port or `~/.pstack-flex` | run the start command in your own terminal; in Claude Code, type it after `!` |
-| A session says "status unknown" | Claude Desktop and SDK sessions keep no process record | nothing to fix; its activity still streams |
-| A banner says a source is degraded or newer than checked | a CLI update changed its transcript format | run `pstack-monitor doctor` and open an issue with its output |
-| An external lane never appears | the journal was off when the lane started | `pstack-monitor journal status`, then `pstack-monitor journal on` |
-| A Codex thread stays "in turn" | Codex was killed mid-turn and wrote no ending | nothing to fix |
+| Symptom | Fix |
+| --- | --- |
+| `port 47317 is unavailable` | `pstack-monitor start --port 47400` |
+| "Link expired" | the monitor restarted; run start again and open the new link |
+| Start fails in a sandboxed session | run the start command in your own terminal (in Claude Code, after `!`) |
+| A session is missing | it has not run pstack yet; click **Show all** |
+| A banner says a source is degraded | run `pstack-monitor doctor` and open an issue with its output |
+| An external lane never appears | `pstack-monitor journal status`, then `journal on` |
 
 ## Cost playbook
 
