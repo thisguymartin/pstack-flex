@@ -76,6 +76,24 @@ describe("lane record", () => {
     expect(kinds(parsed.facts)).not.toContain("link");
   });
 
+  it("is always pstack work and carries what the lane was asked", () => {
+    for (const provider of ["codex", "claude", "grok", "deepseek", "minimax"]) {
+      const parsed = adapter.document(join(dir, "lane.json"), JSON.stringify({ ...record, provider, label: null, promptHead: "Judge the candidates." }));
+      expect(parsed.facts).toContainEqual({ kind: "pstack", id } as never);
+      expect(parsed.facts).toContainEqual({ kind: "prompt", id, text: "Judge the candidates.", at: record.startedAt } as never);
+      expect(parsed.facts[0]).toMatchObject({ patch: { provider, titleHint: "Judge the candidates." } });
+    }
+    const older = adapter.document(join(dir, "lane.json"), JSON.stringify(record));
+    expect(kinds(older.facts)).toContain("pstack");
+    expect(kinds(older.facts)).not.toContain("prompt");
+  });
+
+  it("streams Codex and Grok lanes and waits for exit on Claude, DeepSeek, and MiniMax", () => {
+    const stream = (provider: string) =>
+      (adapter.document(join(dir, "lane.json"), JSON.stringify({ ...record, provider })).facts[0] as { patch: { flavor: { stream: string } } }).patch.flavor.stream;
+    expect(["codex", "grok", "claude", "deepseek", "minimax"].map(stream)).toEqual(["live", "live", "at-exit", "at-exit", "at-exit"]);
+  });
+
   it("rejects a record without the fields it needs", () => {
     expect(adapter.document(join(dir, "lane.json"), JSON.stringify({ provider: "codex" })).problem).toMatchObject({ kind: "shape" });
   });
@@ -146,6 +164,27 @@ describe("stream", () => {
     const parser = adapter.open(join(dir, "stream.jsonl"));
     const parsed = parser.line(JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "progress" }] } }), 0);
     expect(parsed.items[0]).toMatchObject({ kind: "text", body: { text: "progress" } });
+  });
+
+  it("tracks the call a Grok lane is waiting on", () => {
+    const parser = adapter.open(join(dir, "stream.jsonl"));
+    const call = parser.line(JSON.stringify({
+      type: "assistant",
+      message: { content: [{ type: "tool_use", id: "g1", name: "read_file", input: { path: "src/a.ts" } }] },
+    }), 0);
+    expect(call.facts).toContainEqual({ kind: "call", id, callId: "g1", at: null, event: { kind: "started", name: "read_file", snippet: "read_file · src/a.ts" } } as never);
+    const result = parser.line(JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "g1", content: "x" }] } }), 10);
+    expect(result.facts).toEqual([{ kind: "call", id, callId: "g1", at: null, event: { kind: "ended" } }] as never);
+  });
+
+  it("tracks the item a Codex lane is waiting on", () => {
+    const parser = adapter.open(join(dir, "stream.jsonl"));
+    const started = parser.line(JSON.stringify({ type: "item.started", item: { id: "i1", type: "command_execution", command: "bun test" } }), 0);
+    expect(started.facts).toContainEqual(expect.objectContaining({ kind: "call", callId: "i1", event: expect.objectContaining({ kind: "started" }) }));
+    const done = parser.line(JSON.stringify({ type: "item.completed", item: { id: "i1", type: "command_execution", command: "bun test", exit_code: 0 } }), 10);
+    expect(done.facts).toEqual([{ kind: "call", id, callId: "i1", at: null, event: { kind: "ended" } }] as never);
+    const once = adapter.open(join(dir, "stream.jsonl")).line(JSON.stringify({ type: "item.completed", item: { id: "i2", type: "command_execution", command: "ls", exit_code: 0 } }), 0);
+    expect(once.facts.filter((fact) => fact.kind === "call").map((fact) => (fact as { event: { kind: string } }).event.kind)).toEqual(["started", "ended"]);
   });
 
   it("reports events it does not recognize", () => {

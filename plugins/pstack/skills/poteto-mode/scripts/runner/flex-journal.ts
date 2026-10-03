@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { closeSync, mkdirSync, openSync, renameSync, writeFileSync, writeSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AccessMode, Effort, Parent, Provider, RunnerOptions, RunnerReceipt } from "./types.ts";
@@ -10,6 +10,7 @@ import type { AccessMode, Effort, Parent, Provider, RunnerOptions, RunnerReceipt
 // never changes the lane's receipt, exit code, or output.
 
 export const LANES_DIR_VAR = "PSTACK_FLEX_LANES_DIR";
+const PROMPT_HEAD_CHARS = 300;
 
 // The parent harness's own session id, inherited by the runner from the tool that launched it.
 const PARENT_SESSION_VAR: Record<Parent, string> = {
@@ -31,6 +32,8 @@ export interface LaneRecord {
   readonly label: string | null;
   readonly cwd: string;
   readonly promptPath: string;
+  /** The start of the prompt, so the monitor can say what the lane was asked. */
+  readonly promptHead: string | null;
   readonly outputPath: string;
   readonly receiptPath: string;
 }
@@ -48,6 +51,15 @@ export function lanesRoot(env: NodeJS.ProcessEnv = process.env): string {
   return configured !== undefined && configured.trim().length > 0
     ? configured
     : join(homedir(), ".pstack-flex", "lanes");
+}
+
+function promptHead(path: string): string | null {
+  try {
+    const head = readFileSync(path, "utf8").slice(0, PROMPT_HEAD_CHARS * 4).replace(/\s+/g, " ").trim();
+    return head.length === 0 ? null : head.slice(0, PROMPT_HEAD_CHARS);
+  } catch {
+    return null;
+  }
 }
 
 function writeAtomic(path: string, value: unknown): void {
@@ -82,6 +94,7 @@ export function openLaneJournal(
       label: options.label ?? null,
       cwd: options.cwd,
       promptPath: options.promptPath,
+      promptHead: promptHead(options.promptPath),
       outputPath: options.outputPath,
       receiptPath: options.receiptPath,
     };

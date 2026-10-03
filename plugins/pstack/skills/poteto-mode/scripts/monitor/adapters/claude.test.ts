@@ -88,6 +88,68 @@ describe("session transcript", () => {
     expect(command.items[0]).toMatchObject({ kind: "notice", text: "ran /model" });
   });
 
+  it("opens a turn on a human prompt and closes it only at the end of the reply", () => {
+    const turns = (record: Record<string, unknown>) => parser().line(line(record), 0).facts.filter((fact) => fact.kind === "turn");
+    const reply = (stop_reason: string | null) => turns({ type: "assistant", message: { id: "m1", stop_reason, content: [{ type: "text", text: "ok" }] } });
+    expect(turns({ type: "user", message: { role: "user", content: "Build the monitor" } })).toEqual([
+      { kind: "turn", id: "claude:s1", turnId: "turn", at: "2026-10-01T10:00:00.000Z", event: { kind: "started" } },
+    ] as never);
+    expect(reply("tool_use")).toEqual([]);
+    expect(reply(null)).toEqual([]);
+    expect(reply("end_turn")).toMatchObject([{ event: { kind: "ended", outcome: "done" } }]);
+    expect(reply("stop_sequence")).toMatchObject([{ event: { kind: "ended", outcome: "done" } }]);
+    expect(turns({ type: "user", message: { role: "user", content: [{ type: "text", text: "[Request interrupted by user]" }] } }))
+      .toMatchObject([{ event: { kind: "ended", outcome: "cancelled" } }]);
+    expect(turns({ type: "user", isMeta: true, message: { role: "user", content: "caveat" } })).toEqual([]);
+    expect(turns({ type: "user", message: { role: "user", content: "<command-name>/model</command-name>" } })).toEqual([]);
+  });
+
+  it("records the prompt an agent is working on", () => {
+    const prompt = parser().line(line({ type: "user", message: { role: "user", content: "Build the\nmonitor" } }), 0);
+    expect(prompt.facts).toContainEqual({ kind: "prompt", id: "claude:s1", text: "Build the monitor", at: "2026-10-01T10:00:00.000Z" } as never);
+    const reminder = parser().line(line({ type: "user", message: { role: "user", content: "<system-reminder>x</system-reminder>" } }), 0);
+    expect(kinds(reminder.facts)).not.toContain("prompt");
+  });
+
+  it("reports the tool call awaiting its result", () => {
+    const call = parser().line(line({
+      type: "assistant",
+      message: { id: "m1", content: [{ type: "tool_use", id: "call-1", name: "Bash", input: { command: "bun test" } }] },
+    }), 0);
+    expect(call.facts).toContainEqual({
+      kind: "call",
+      id: "claude:s1",
+      callId: "call-1",
+      at: "2026-10-01T10:00:00.000Z",
+      event: { kind: "started", name: "Bash", snippet: "Bash · bun test" },
+    } as never);
+    const result = (extra: Record<string, unknown>) => parser().line(line({
+      type: "user",
+      ...extra,
+      message: { role: "user", content: [{ type: "tool_result", tool_use_id: "call-1", content: "ok" }] },
+    }), 0);
+    const ended = { kind: "call", id: "claude:s1", callId: "call-1", at: "2026-10-01T10:00:00.000Z", event: { kind: "ended" } };
+    expect(result({}).facts).toContainEqual(ended as never);
+    expect(result({ isMeta: true }).facts).toContainEqual(ended as never);
+  });
+
+  it("flags pstack work from attribution, skills, agents, and commands", () => {
+    const flagged = (record: Record<string, unknown>) => kinds(parser().line(line(record), 0).facts).includes("pstack");
+    const assistant = (extra: Record<string, unknown>, content: unknown[] = [{ type: "text", text: "ok" }]) =>
+      ({ type: "assistant", ...extra, message: { id: "m1", content } });
+    const tool = (name: string, input: Record<string, unknown>) => assistant({}, [{ type: "tool_use", id: "c1", name, input }]);
+    expect(flagged(assistant({ attributionPlugin: "pstack" }))).toBe(true);
+    expect(flagged(assistant({ attributionSkill: "pstack:poteto-mode" }))).toBe(true);
+    expect(flagged(assistant({ attributionAgent: "pstack:pstack-opus-high" }))).toBe(true);
+    expect(flagged(assistant({ attributionPlugin: "caveman" }))).toBe(false);
+    expect(flagged(tool("Skill", { skill: "pstack:arena" }))).toBe(true);
+    expect(flagged(tool("Skill", { skill: "impeccable" }))).toBe(false);
+    expect(flagged(tool("Agent", { subagent_type: "pstack:pstack-fable-high", prompt: "x" }))).toBe(true);
+    expect(flagged(tool("Agent", { subagent_type: "Explore", prompt: "x" }))).toBe(false);
+    expect(flagged({ type: "user", message: { role: "user", content: "<command-name>/pstack:monitor</command-name>" } })).toBe(true);
+    expect(flagged({ type: "user", message: { role: "user", content: "<command-name>/model</command-name>" } })).toBe(false);
+  });
+
   it("turns SendMessage calls into messages, leaving other sessions' sockets out", () => {
     const send = (to: string) => parser().line(line({
       type: "assistant",
@@ -148,6 +210,8 @@ describe("documents", () => {
     ] as never);
     const stopped = adapter.document(metaPath, JSON.stringify({ agentType: "Explore", toolUseId: "call-1", stoppedByUser: true }));
     expect(kinds(stopped.facts)).toContain("outcome");
+    const lane = adapter.document(metaPath, JSON.stringify({ agentType: "pstack:pstack-opus-high", toolUseId: "call-1" }));
+    expect(lane.facts).toContainEqual({ kind: "pstack", id: "claude:s1:a1" } as never);
   });
 
   it("turns a process record into a probe-able process", () => {

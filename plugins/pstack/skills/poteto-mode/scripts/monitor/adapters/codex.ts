@@ -23,7 +23,7 @@ import {
   text,
   usageFrom,
 } from "../json.ts";
-import { BODY_LIMIT, describeTool, itemId, textActivity } from "./blocks.ts";
+import { BODY_LIMIT, callEnded, describeTool, itemId, promptFact, textActivity } from "./blocks.ts";
 
 // pstack-flex addition. Reads Codex rollouts. Each thread, including every
 // spawned child, writes its own rollout; children name their parent thread.
@@ -36,6 +36,10 @@ const IGNORED_TYPES = new Set([
   "compacted",
   "inter_agent_communication_metadata",
 ]);
+
+/** Paths and commands only pstack's skills and runner use. */
+const PSTACK_MARKERS = ["pstack-runner", "open-pstack/pstack/", "/pstack/skills/"];
+const PSTACK_WORD = /\bpstack\b/i;
 
 const IGNORED_ITEMS = new Set(["ghost_snapshot"]);
 
@@ -214,6 +218,9 @@ class RolloutParser implements LineParser {
         }
         if (isInjectedContext(body)) return NOTHING;
         const facts: Fact[] = this.isChild ? [] : [{ kind: "agent", id: this.agent, patch: { titleHint: oneLine(body, 80) } }];
+        facts.push(promptFact(this.agent, body, at));
+        // A child's prompt can quote its parent's history, so only a root prompt counts as asking for pstack.
+        if (!this.isChild && PSTACK_WORD.test(body)) facts.push({ kind: "pstack", id: this.agent });
         return parsed(facts, [{ id, at, kind: "prompt", body: clip(body, BODY_LIMIT) }]);
       }
       case "reasoning": {
@@ -237,10 +244,13 @@ class RolloutParser implements LineParser {
             ? text(payload.input) ?? ""
             : pretty(payload.action);
         const callId = text(payload.call_id) ?? text(payload.id) ?? `${offset}`;
-        return parsed(
-          [{ kind: "activity", id: this.agent, activity: { what: "tool", snippet: describeTool(name, firstLine(input)), at } }],
-          [{ id, at, kind: "tool-call", callId, name, input: clip(input, BODY_LIMIT) }],
-        );
+        const snippet = describeTool(name, firstLine(input));
+        const facts: Fact[] = [
+          { kind: "activity", id: this.agent, activity: { what: "tool", snippet, at } },
+          { kind: "call", id: this.agent, callId, at, event: { kind: "started", name, snippet } },
+        ];
+        if (PSTACK_MARKERS.some((marker) => input.includes(marker))) facts.push({ kind: "pstack", id: this.agent });
+        return parsed(facts, [{ id, at, kind: "tool-call", callId, name, input: clip(input, BODY_LIMIT) }]);
       }
       case "function_call_output":
       case "custom_tool_call_output":
@@ -248,7 +258,7 @@ class RolloutParser implements LineParser {
         const callId = text(payload.call_id);
         if (callId === null) return problem({ kind: "shape", recordType: `response_item/${type}`, detail: "missing call_id" });
         const output = typeof payload.output === "string" ? payload.output : contentText(payload.output);
-        return parsed([], [{ id, at, kind: "tool-result", callId, ok: null, output: clip(output, BODY_LIMIT) }]);
+        return parsed([callEnded(this.agent, callId, at)], [{ id, at, kind: "tool-result", callId, ok: null, output: clip(output, BODY_LIMIT) }]);
       }
       case "agent_message": {
         // Recorded once, in the recipient's rollout.

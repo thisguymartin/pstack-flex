@@ -30,6 +30,15 @@ const pidFile = (state: string, pid = 10): Fact => ({
   process: { pid, startedAtMs: null, state },
 });
 
+const started = (id: AgentId, at: string): Fact => ({ kind: "turn", id, turnId: "turn", at, event: { kind: "started" } });
+const finished = (id: AgentId, at: string, outcome: "done" | "cancelled" = "done"): Fact => ({
+  kind: "turn",
+  id,
+  turnId: "turn",
+  at,
+  event: { kind: "ended", outcome, reason: null },
+});
+
 describe("Claude session status", () => {
   it("follows the live process record", () => {
     const busy = store(session, pidFile("busy"));
@@ -53,6 +62,21 @@ describe("Claude session status", () => {
 
   it("does not guess without process records", () => {
     expect(store(session).node(root)!.status.kind).toBe("unknown");
+  });
+
+  it("follows its turns when it keeps no process record", () => {
+    const desktop = store(session, started(root, "t0"));
+    expect(desktop.node(root)!.status).toEqual({ kind: "running", evidence: "lifecycle" });
+    desktop.apply(finished(root, "t1"));
+    expect(desktop.node(root)!.status).toEqual({ kind: "idle", evidence: "lifecycle", detail: null });
+    desktop.apply(finished(root, "t2", "cancelled"));
+    expect(desktop.node(root)!.status).toEqual({ kind: "idle", evidence: "lifecycle", detail: "interrupted" });
+  });
+
+  it("stays ended inside a turn once its terminal process record is gone", () => {
+    const gone = store(session, started(root, "t0"));
+    gone.noteProcessRecords("claude");
+    expect(gone.node(root)!.status.kind).toBe("ended");
   });
 
   it("keeps the probe result when the record is rewritten for the same process", () => {
@@ -103,6 +127,33 @@ describe("Claude subagent status", () => {
     expect(orphan.node(child)!.status.kind).toBe("ended");
   });
 
+  it("finishes on its own end of turn before the parent records a result", () => {
+    const spawned = live(
+      { kind: "link-by-call", id: child, callId: "call-1", fallback: root },
+      started(child, "t0"),
+    );
+    expect(spawned.node(child)!.status).toEqual({ kind: "running", evidence: "lifecycle" });
+    spawned.apply(finished(child, "t1"));
+    expect(spawned.node(child)!.status).toEqual({ kind: "done", at: "t1" });
+    spawned.apply({ kind: "child-outcome", callId: "call-1", outcome: "launched", at: "t2", reason: null });
+    expect(spawned.node(child)!.status).toEqual({ kind: "done", at: "t1" });
+    spawned.apply({ kind: "child-outcome", callId: "call-1", outcome: "cancelled", at: "t3", reason: null });
+    expect(spawned.node(child)!.status).toEqual({ kind: "cancelled", at: "t3" });
+  });
+
+  it("runs mid-turn while its session lives and ends with it", () => {
+    const spawned = live({ kind: "link-by-call", id: child, callId: "call-1", fallback: root }, started(child, "t0"));
+    expect(spawned.node(child)!.status.kind).toBe("running");
+    spawned.setAlive("/sessions/10.json", false);
+    expect(spawned.node(child)!.status.kind).toBe("ended");
+  });
+
+  it("revives when a message resumes it", () => {
+    const resumed = live({ kind: "link-by-call", id: child, callId: "call-1", fallback: root }, started(child, "t0"), finished(child, "t1"));
+    resumed.apply(started(child, "t2"));
+    expect(resumed.node(child)!.status).toEqual({ kind: "running", evidence: "lifecycle" });
+  });
+
   it("attaches to whichever agent made the spawning call", () => {
     const nested = live(
       { kind: "link-by-call", id: child, callId: "call-1", fallback: root },
@@ -147,6 +198,68 @@ describe("Codex thread status", () => {
     expect(result.node(childThread)!.parent).toBe(thread);
     result.apply({ kind: "turn", id: childThread, turnId: "u2", at: "t2", event: { kind: "started" } });
     expect(result.node(childThread)!.status.kind).toBe("running");
+  });
+});
+
+describe("activity", () => {
+  const call = (callId: string, at: string, name = "Bash"): Fact => ({
+    kind: "call",
+    id: root,
+    callId,
+    at,
+    event: { kind: "started", name, snippet: `${name} · ${callId}` },
+  });
+  const done = (callId: string): Fact => ({ kind: "call", id: root, callId, at: "t9", event: { kind: "ended" } });
+
+  it("keeps the latest call still awaiting its result", () => {
+    const result = store(session, started(root, "t0"), call("c1", "t1"));
+    expect(result.node(root)!.pending).toEqual({ name: "Bash", snippet: "Bash · c1", since: "t1" });
+    result.apply(call("c2", "t2", "Read"));
+    expect(result.node(root)!.pending?.snippet).toBe("Read · c2");
+    result.apply(done("c1"));
+    expect(result.node(root)!.pending?.snippet).toBe("Read · c2");
+    result.apply(done("c2"));
+    expect(result.node(root)!.pending).toBeNull();
+    result.apply(call("c3", "t3"));
+    result.apply(finished(root, "t4"));
+    expect(result.node(root)!.pending).toBeNull();
+  });
+
+  it("keeps the latest prompt", () => {
+    const result = store(
+      session,
+      { kind: "prompt", id: root, text: "first", at: "t0" },
+      { kind: "prompt", id: root, text: "second", at: "t1" },
+    );
+    expect(result.node(root)!.prompt).toEqual({ text: "second", at: "t1" });
+    expect(result.node(root)!.lastActivityAt).toBe("t1");
+  });
+});
+
+describe("pstack scope", () => {
+  const other = "claude:s2" as AgentId;
+  const otherSession: Fact = { ...session, id: other } as Fact;
+
+  it("marks the whole spawn tree when any member is pstack work", () => {
+    const result = store(
+      session,
+      subagent,
+      { kind: "link-by-call", id: child, callId: "call-1", fallback: root },
+      otherSession,
+    );
+    expect(result.node(root)!.pstack).toBe(false);
+    result.apply({ kind: "pstack", id: child });
+    expect(result.node(root)!.pstack).toBe(true);
+    expect(result.node(child)!.pstack).toBe(true);
+    expect(result.node(other)!.pstack).toBe(false);
+  });
+
+  it("sends the newly marked tree in the next flush", () => {
+    const result = store(session, subagent, otherSession);
+    result.flush();
+    result.apply({ kind: "pstack", id: root });
+    const upserts = result.flush()!.upserts.map((node) => node.id).sort();
+    expect(upserts).toEqual([root, child].sort());
   });
 });
 
