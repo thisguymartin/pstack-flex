@@ -1,11 +1,8 @@
 # CHANGES — applied substitutions
 
-## Unreleased: agent monitor
+## Unreleased: lane journal
 
-- Add `/pstack:monitor` and `pstack-monitor`, a read-only local server that draws pstack work on this machine as a live node canvas: each session that runs pstack, every subagent it spawns, and external Codex, Grok, DeepSeek, and MiniMax lanes, with each agent's model and messages. `--all` or **Show all** shows every session. Tracked in [pstack-flex #23](https://github.com/thisguymartin/pstack-flex/issues/23).
-- Status comes from process records, turn boundaries, parent results, and lane receipts, never file times. The page separates working, waiting for input, stalled, and finished, and shows each agent's task, the tool call it waits on, and its latest step.
-- The agent panel resizes by dragging its edge or with a widen button, and remembers its width.
-- `pstack-runner` writes an opt-in lane journal (start record with the head of the prompt, stdout as it arrives, receipt copy) under `~/.pstack-flex/lanes/` while that directory exists. `--label` names a lane. A journal failure never changes a lane's receipt, exit status, or output.
+- `pstack-runner` writes an opt-in lane journal (start record with the head of the prompt, stdout as it arrives, receipt copy) under `~/.pstack-flex/lanes/` while that directory exists. `--label` names a lane. A journal failure never changes a lane's receipt, exit status, or output. [psf-monitor](https://github.com/thisguymartin/psf-monitor) reads the journal to show lanes while they run; the agent monitor that first shipped here moved there. Tracked in [pstack-flex #23](https://github.com/thisguymartin/pstack-flex/issues/23).
 
 ## Unreleased: merge open-pstack 1.5.0 (Cursor pstack 0.15.5)
 
