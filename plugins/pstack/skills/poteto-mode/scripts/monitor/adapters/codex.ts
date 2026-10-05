@@ -38,7 +38,7 @@ const IGNORED_TYPES = new Set([
 ]);
 
 /** Paths and commands only pstack's skills and runner use. */
-const PSTACK_MARKERS = ["pstack-runner", "open-pstack/pstack/", "/pstack/skills/"];
+const PSTACK_MARKERS = ["pstack-runner", "pstack-flex/pstack/", "open-pstack/pstack/", "/pstack/skills/"];
 const PSTACK_WORD = /\bpstack\b/i;
 
 const IGNORED_ITEMS = new Set(["ghost_snapshot"]);

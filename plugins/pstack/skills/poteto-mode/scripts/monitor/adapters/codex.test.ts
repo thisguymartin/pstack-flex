@@ -121,6 +121,7 @@ describe("rollout", () => {
     expect(flagged(childThread, childMeta(), ask("Use pstack:monitor."))).toBe(false);
     expect(flagged(parentThread, rootMeta, shell("pstack-runner --parent codex --provider minimax"))).toBe(true);
     expect(flagged(parentThread, rootMeta, shell("cat ~/.codex/plugins/cache/open-pstack/pstack/1.5.0/skills/arena/SKILL.md"))).toBe(true);
+    expect(flagged(parentThread, rootMeta, shell("cat ~/.codex/plugins/cache/pstack-flex/pstack/1.5.0/skills/arena/SKILL.md"))).toBe(true);
     expect(flagged(parentThread, rootMeta, shell("ls"))).toBe(false);
   });
 

@@ -34,15 +34,15 @@ flowchart TD
 
 Every lane is a real agent process with tools and file access. The parent harness (your Claude Code or Codex session) resolves the route once; children never pick their own models.
 
-## Install this fork
+## Install
 
-The marketplace keeps upstream's name (`open-pstack`), so only the source changes.
+The marketplace is named `pstack-flex` and carries the `pstack` plugin. If you have Eric Litman's open-pstack installed, remove it first: both ship a plugin named `pstack`, so their skills would share the `pstack:` names.
 
 Claude Code:
 
 ```text
 /plugin marketplace add thisguymartin/pstack-flex
-/plugin install pstack@open-pstack
+/plugin install pstack@pstack-flex
 /reload-plugins
 ```
 
@@ -50,7 +50,7 @@ Codex:
 
 ```shell
 codex plugin marketplace add thisguymartin/pstack-flex --ref main
-codex plugin add pstack@open-pstack
+codex plugin add pstack@pstack-flex
 ```
 
 Plus [Bun](https://bun.sh) for the lane runner, and `multi_agent = true` under `[features]` in `~/.codex/config.toml` if Codex is your parent. Sign in only to the CLIs whose subscriptions you actually have — missing families are fine now.

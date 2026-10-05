@@ -1,4 +1,4 @@
-# open-pstack
+# pstack-flex
 
 Track all durable work in this repository's GitHub Issues. Do not create a parallel Linear queue. Read `UPSTREAM.md` before changing upstream-derived content.
 
