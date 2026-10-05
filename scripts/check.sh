@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs every local check a pull request needs before review: install,
-# tests, strict typecheck for both plugins, manifest parse, static
+# tests, strict typecheck, manifest parse, static
 # invariants, and Claude plugin validation when the claude CLI is present.
 # This is the local half of the gate. The live half is docs/LIVE-GATE.md.
 set -uo pipefail
@@ -21,19 +21,16 @@ step() {
 
 in_dir() { (cd "$1" && shift && "$@"); }
 
-for pkg in plugins/pstack/skills/poteto-mode/scripts plugins/pstack-monitor/scripts; do
-  step "install $pkg" in_dir "$repo/$pkg" bun install --frozen-lockfile
-  step "test $pkg" in_dir "$repo/$pkg" bun run test
-  step "typecheck $pkg" in_dir "$repo/$pkg" bun run typecheck
-done
+pkg=plugins/pstack/skills/poteto-mode/scripts
+step "install" in_dir "$repo/$pkg" bun install --frozen-lockfile
+step "test" in_dir "$repo/$pkg" bun run test
+step "typecheck" in_dir "$repo/$pkg" bun run typecheck
 
 manifests=(
   .claude-plugin/marketplace.json
   .agents/plugins/marketplace.json
   plugins/pstack/.claude-plugin/plugin.json
   plugins/pstack/.codex-plugin/plugin.json
-  plugins/pstack-monitor/.claude-plugin/plugin.json
-  plugins/pstack-monitor/.codex-plugin/plugin.json
 )
 parse_manifests() {
   local path
@@ -45,7 +42,7 @@ step "manifests parse" parse_manifests
 step "static invariants" env PSTACK_STATIC_ONLY=1 bash "$repo/tests/skill-collision-repro.sh"
 
 if command -v claude >/dev/null 2>&1; then
-  for target in . plugins/pstack plugins/pstack-monitor; do
+  for target in . plugins/pstack; do
     step "claude plugin validate $target" claude plugin validate "$repo/$target"
   done
 else

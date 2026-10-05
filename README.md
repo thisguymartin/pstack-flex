@@ -4,7 +4,7 @@
 [![Based on open-pstack v1.5.0](https://img.shields.io/badge/based%20on-open--pstack%20v1.5.0-blue)](https://github.com/ericlitman/open-pstack/releases/tag/v1.5.0)
 [![MIT license](https://img.shields.io/github/license/thisguymartin/pstack-flex)](LICENSE)
 
-**pstack-flex runs [Lauren Tan (@poteto)](https://x.com/poteto)'s [pstack](https://github.com/cursor/plugins/tree/main/pstack) in Claude Code and Codex on the models you actually have.** It is built on [ericlitman/open-pstack](https://github.com/ericlitman/open-pstack), which translates pstack's Cursor-specific parts for Claude Code and Codex. open-pstack assumes four frontier subscriptions. pstack-flex keeps its skills and workflows, changes which models setup accepts and how they are reached, and adds its own skills and an optional agent monitor.
+**pstack-flex runs [Lauren Tan (@poteto)](https://x.com/poteto)'s [pstack](https://github.com/cursor/plugins/tree/main/pstack) in Claude Code and Codex on the models you actually have.** It is built on [ericlitman/open-pstack](https://github.com/ericlitman/open-pstack), which translates pstack's Cursor-specific parts for Claude Code and Codex. open-pstack assumes four frontier subscriptions. pstack-flex keeps its skills and workflows, changes which models setup accepts and how they are reached, and adds its own skills. The agent monitor lives in its own repository, [psf-monitor](https://github.com/thisguymartin/psf-monitor).
 
 Lauren built pstack from the skills she uses to ship code at Cursor. In a [55-minute interview with Denis Labelle](https://x.com/DenisLabelle/status/2091337807939706928), she says that she shipped 1,000 pull requests in one month after steadily improving how her agents work and verify their results.
 
@@ -142,24 +142,11 @@ Use pstack:poteto-mode. Add saved filters to search. Keep the design simple, ver
 
 For that feature, poteto-mode should first understand how search works today. It should decide how the data should be represented before writing code, implement the smallest complete version, run the feature the way a user would, review the result, and prepare the pull request.
 
-That is the main workflow. The other skills are there when poteto-mode needs them or when you want to call one directly. **[docs/USAGE.md](docs/USAGE.md)** is the longer walkthrough: three setup configurations (full frontier, hybrid saver, zero-subscription), copy-paste examples for the daily skills, how to read receipts, watching your agents, and troubleshooting.
+That is the main workflow. The other skills are there when poteto-mode needs them or when you want to call one directly. **[docs/USAGE.md](docs/USAGE.md)** is the longer walkthrough: three setup configurations (full frontier, hybrid saver, zero-subscription), copy-paste examples for the daily skills, how to read receipts, and troubleshooting.
 
 ### 3. Watch your agents (optional)
 
-The monitor is a separate plugin in the same marketplace, so install it only if you want it:
-
-```text
-/plugin install pstack-monitor@pstack-flex      # Claude Code
-codex plugin add pstack-monitor@pstack-flex     # Codex
-```
-
-It does not start by itself. Start it when you want to watch a run:
-
-```text
-/pstack-monitor:monitor
-```
-
-In Codex, ask for `pstack-monitor:monitor`. It prints a link to a local page that draws each session running pstack, the agents it spawned, the external lanes pstack launched, and what each one is doing now, live. It keeps running in the background until you say "pstack, kill the monitor" or restart the machine. See [Watching your agents](docs/USAGE.md#watching-your-agents-the-monitor) for the terminal commands and troubleshooting.
+The agent monitor is a separate plugin, [psf-monitor](https://github.com/thisguymartin/psf-monitor). Install it next to pstack to watch each pstack session, the agents it spawned, and the external lanes pstack launched, live, and to cancel a running lane from the page.
 
 ## Useful skills
 
@@ -176,7 +163,6 @@ In Codex, ask for `pstack-monitor:monitor`. It prints a link to a local page tha
 | `reflect` | A hard task is finished and its lessons should improve the next run. |
 | `intake` | You have GitHub issues and want each turned into a ready-to-run brief with a playbook, an observable exit condition, and a worktree. |
 | `diff-behavior` | You want to know what a change did from the outside: the same scenarios on trunk and head, with every unclaimed difference flagged. |
-| `pstack-monitor:monitor` | You want to watch your agents work: a live graph of each pstack session, its subagents and model lanes, and what each is doing now. Separate plugin. |
 
 Plugin skills include `pstack:` in their name. In Claude Code, invoke a native skill such as `/pstack:architect`. In Codex, ask for the skill, such as `Use pstack:architect for this design.` See the [technical reference](docs/reference.md) for the full list.
 

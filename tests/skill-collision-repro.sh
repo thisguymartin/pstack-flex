@@ -45,23 +45,6 @@ else
   fail=1
 fi
 
-mvc="$(verof "$repo/plugins/pstack-monitor/.claude-plugin/plugin.json")"
-mvx="$(verof "$repo/plugins/pstack-monitor/.codex-plugin/plugin.json")"
-mvm="$(sed -n '/"name": "pstack-monitor"/,/}/p' "$repo/.claude-plugin/marketplace.json" | verof /dev/stdin)"
-if [ -n "$mvc" ] && [ "$mvc" = "$mvx" ] && [ "$mvc" = "$mvm" ]; then
-  note "ok: pstack-monitor version matches across its 2 manifests and the marketplace ($mvc)"
-else
-  note "FAIL: pstack-monitor version differs: claude-plugin=$mvc codex-plugin=$mvx marketplace=$mvm"
-  fail=1
-fi
-
-if grep -rqE 'from "[^"]*/runner/' "$repo/plugins/pstack-monitor/scripts/monitor" --include='*.ts' --exclude='*.test.ts'; then
-  note "FAIL: pstack-monitor imports the pstack runner directly; use monitor/lane-contract.ts"
-  fail=1
-else
-  note "ok: pstack-monitor reaches the runner only through the lane journal contract"
-fi
-
 # Active configuration must use Claude's rolling family aliases. Concrete
 # provider reports may still appear in runner fixtures, but no shipped
 # descriptor, native-agent model field, or live test invocation may pin one.

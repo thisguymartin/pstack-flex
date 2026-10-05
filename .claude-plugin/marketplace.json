@@ -24,23 +24,6 @@
         "subagents",
         "unslop"
       ]
-    },
-    {
-      "name": "pstack-monitor",
-      "source": "./plugins/pstack-monitor",
-      "description": "Optional companion: a live, read-only local view of pstack sessions, subagents, and model lanes.",
-      "version": "1.0.0",
-      "author": {
-        "name": "Martin Patino"
-      },
-      "homepage": "https://github.com/thisguymartin/pstack-flex",
-      "license": "MIT",
-      "keywords": [
-        "pstack",
-        "monitor",
-        "agents",
-        "observability"
-      ]
     }
   ]
 }

@@ -13,24 +13,7 @@
       "policy": {
         "installation": "AVAILABLE",
         "authentication": "ON_INSTALL",
-        "products": [
-          "CODEX"
-        ]
-      },
-      "category": "Developer Tools"
-    },
-    {
-      "name": "pstack-monitor",
-      "source": {
-        "source": "local",
-        "path": "./plugins/pstack-monitor"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL",
-        "products": [
-          "CODEX"
-        ]
+        "products": ["CODEX"]
       },
       "category": "Developer Tools"
     }

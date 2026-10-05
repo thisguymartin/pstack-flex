@@ -64,9 +64,6 @@ The marketplace install is the normal user path. Direct links are only for testi
 │   │   └── poteto-mode/scripts/      # bun/bash/node tooling: watch-pr, orch, runner, check-plan.mjs, worktree-audit.sh
 │   ├── hooks/                        # SessionStart opt-in gate: pstack runs only on request (Claude Code and Codex)
 │   └── agents/                       # Claude subagents, including native Fable and Opus lanes at each selectable effort
-├── plugins/pstack-monitor/           # optional agent monitor plugin (its own manifests, skill, and Bun package)
-│   ├── skills/monitor/SKILL.md       # start, stop, status, doctor
-│   └── scripts/monitor/              # server, adapters, web UI, lane-contract.ts (the lane journal interface)
 ├── tests/skill-collision-repro.sh    # native-skill package invariants and Claude invocation checks
 ├── LICENSE                           # pstack upstream MIT
 ├── LICENSE-cursor-team-kit           # cursor-team-kit upstream MIT
@@ -156,20 +153,12 @@ The table uses the short upstream names. Claude Code exposes each native skill w
 | `/fix-merge-conflicts` | non-interactively resolve merge conflicts, validate, finalize |
 | `/get-pr-comments` | fetch and summarize review comments from the active PR |
 | `/what-did-i-get-done` | summarize authored commits over a user-chosen period |
-| `/pstack-monitor:monitor` | open a live local view of running agents, their spawn tree, and each agent's activity (separate `pstack-monitor` plugin) |
 
-## Agent monitor
+## Lane journal
 
-The monitor is a separate plugin, `plugins/pstack-monitor/`, installed as `pstack-monitor@pstack-flex`. Its only interface with the pstack plugin is the lane journal, restated in `scripts/monitor/lane-contract.ts`; a repository test fails when that copy drifts from the runner's types. `/pstack-monitor:monitor` starts `scripts/monitor/pstack-monitor`, a read-only server on `127.0.0.1` (default port 47317), and prints a link with a per-start access token. The page draws one session's agents as a node canvas and streams any agent's timeline in a resizable side panel.
+`pstack-runner` writes an opt-in journal under `~/.pstack-flex/lanes/` (or `PSTACK_FLEX_LANES_DIR`) while that directory exists. Each lane gets one directory holding `lane.json` (schema version 1: provider, model, effort, mode, label, the first 300 characters of the prompt, runner pid, parent harness and session), `stream.jsonl` (stdout as it arrives), and `receipt.json` (a copy of the receipt). Sending SIGTERM to the runner pid cancels the lane and writes a `cancelled` receipt. A journal failure never changes a lane's receipt, exit status, or output.
 
-- **Scope.** The server indexes every Claude Code and Codex session and marks a spawn tree as pstack work when any member shows pstack evidence: `attributionPlugin`/`attributionSkill`/`attributionAgent` on Claude records, a `Skill` or `Agent` call naming `pstack:`, a `/pstack:` command, a `pstack:` subagent sidecar, a Codex root prompt naming pstack or a call into `pstack-runner` or pstack's skills, or any runner lane. The page shows marked trees by default; **Show all** or `?all=1` (`start --all`) shows everything.
-- **Sources.** Claude Code session and subagent transcripts, `.meta.json` sidecars, and `~/.claude/sessions/<pid>.json` process records; Codex rollouts under `~/.codex/sessions/`. No hook, no harness setting. `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and `PSTACK_FLEX_MONITOR_DIR` move them.
-- **Status comes from evidence, never file times.** A terminal session follows its live process record (`busy` is working, `idle` is waiting for input). Sessions without one, and Claude subagents, follow turn boundaries: a human prompt opens a turn and an `end_turn` reply closes it. A subagent is done when its own turn ends or its parent records the result, whichever comes first. A Codex thread follows `task_started` and `task_complete`. The page adds two qualifiers: quiet after 90 s without stamped activity, and stalled once a turn-only run has been silent for 15 minutes.
-- **Activity.** Each agent carries its latest prompt, the tool call still awaiting a result, and its latest step. Cards, the session list, and the panel's Task and Now lines show them.
-- **External lanes.** `pstack-runner` writes an opt-in journal under `~/.pstack-flex/lanes/` (or `PSTACK_FLEX_LANES_DIR`) while that directory exists: `lane.json` (provider, model, effort, label, the first 300 characters of the prompt, runner pid, parent session), `stream.jsonl` (stdout as it arrives), and `receipt.json`. `pstack-monitor start` creates it, `journal off` deletes it, and the server prunes lanes older than 7 days. Codex and Grok lanes stream; Claude, DeepSeek, and MiniMax lanes print one result at exit. A journal failure never changes a lane's receipt, exit status, or output.
-- **Messages between agents.** Arrowed arcs with a count, from Codex agent messages (addressed by agent path) and Claude Code `SendMessage` calls. Messages to another session's socket are left off.
-- **Format drift is visible.** Unrecognized and malformed records are counted per source; the page shows a banner and `pstack-monitor doctor` prints counts and CLI versions, never content.
-- **Lifecycle and security.** `start` reuses a running server of the same build and replaces another build. The server binds loopback, rejects foreign `Host` and `Origin` headers, accepts no writes, requires the token (exchanged for an `HttpOnly`, `SameSite=Strict` cookie) everywhere except a data-free health check, and renders transcript text only as text. Nothing times it out.
+[psf-monitor](https://github.com/thisguymartin/psf-monitor) reads this journal to show lanes while they run. It keeps its own copy of the schema, so a change to `lane.json` needs a matching psf-monitor change.
 
 ## Subagents
 

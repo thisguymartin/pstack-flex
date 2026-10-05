@@ -6,7 +6,7 @@ import type { AccessMode, Effort, Parent, Provider, RunnerOptions, RunnerReceipt
 
 // pstack-flex addition. An opt-in journal of each external lane, so the agent
 // monitor can show a lane while it runs. Journaling is on only when the lanes
-// directory exists; `pstack-monitor journal on` creates it. A journal failure
+// directory exists; psf-monitor's `journal on` creates it. A journal failure
 // never changes the lane's receipt, exit code, or output.
 
 export const LANES_DIR_VAR = "PSTACK_FLEX_LANES_DIR";
