@@ -171,4 +171,4 @@ Write the results to `docs/gateway-model-probes.md` and to #7. Then:
 
 ## Out of scope
 
-OpenRouter presets, the auto router or model fallback lists, real cost from OpenRouter billing, per-model automatic context caps, OpenRouter as the parent session (works today via the zero-subscription env walkthrough, docs only), OpenCode (#68), the registry redesign (#103).
+OpenRouter presets, the auto router or model fallback lists, real cost from OpenRouter billing, per-model automatic context caps, OpenRouter as the parent session (works today via the zero-subscription env walkthrough, docs only), OpenCode ([open-pstack#68](https://github.com/ericlitman/open-pstack/issues/68)), the registry redesign ([open-pstack#103](https://github.com/ericlitman/open-pstack/issues/103)).
