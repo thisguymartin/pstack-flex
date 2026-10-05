@@ -142,6 +142,20 @@ describe("parseProviderOutput", () => {
     expect(reportedModelMatches("claude", "MiniMax-M3", "minimax-m3")).toBe(false);
   });
 
+  it("reads Claude Code's thinking tokens as reasoning tokens", () => {
+    const parsed = parseProviderOutput(
+      "openrouter",
+      JSON.stringify({
+        result: "62",
+        usage: { input_tokens: 40, output_tokens: 900, output_tokens_details: { thinking_tokens: 870 } },
+        modelUsage: { "z-ai/glm-5.3": {} },
+      }),
+      "",
+      "z-ai/glm-5.3"
+    );
+    expect(parsed.usage).toMatchObject({ outputTokens: 900, reasoningTokens: 870 });
+  });
+
   it("matches OpenRouter models exactly, ignoring only case", () => {
     expect(reportedModelMatches("openrouter", "z-ai/glm-5.3", "z-ai/glm-5.3")).toBe(true);
     expect(reportedModelMatches("openrouter", "z-ai/glm-5.3", "Z-AI/GLM-5.3")).toBe(true);

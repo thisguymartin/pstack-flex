@@ -38,7 +38,9 @@ function normalizedUsage(value: unknown): NormalizedUsage | null {
     ),
     outputTokens: finiteNumber(usage.output_tokens),
     reasoningTokens: finiteNumber(
-      usage.reasoning_tokens ?? usage.reasoning_output_tokens
+      usage.reasoning_tokens ??
+        usage.reasoning_output_tokens ??
+        object(usage.output_tokens_details)?.thinking_tokens
     ),
     totalTokens: finiteNumber(usage.total_tokens),
   };

@@ -406,7 +406,9 @@ function successfulPreflightEvidence(provider: Provider, model: string): string 
 }
 
 function unavailableStatus(value: string): ReceiptStatus {
-  if (/not logged in|unauthenticated|authentication|sign in|login required/i.test(value)) {
+  // Claude Code 2.1.289 reports a rejected gateway key as "Failed to
+  // authenticate. API Error: 401" with `"api_error_status":401` in its result.
+  if (/not logged in|unauthenticated|authenticat(e|ion)|sign in|login required|"api_error_status":\s*401\b/i.test(value)) {
     return "unauthenticated";
   }
   if (/model.{0,40}(not found|unknown|unavailable|unsupported|not supported|invalid)|invalid.{0,20}model/i.test(value)) {

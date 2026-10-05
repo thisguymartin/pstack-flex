@@ -106,6 +106,11 @@ if (stage === "model" && process.env.FAKE_AUTH_ERROR === "1") {
   console.error("API error: authentication_error - invalid api key");
   process.exit(1);
 }
+if (stage === "model" && process.env.FAKE_AUTH_ERROR === "claude-401") {
+  // Claude Code 2.1.289's real result for a gateway key OpenRouter rejects.
+  console.log(JSON.stringify({type:"result",subtype:"success",is_error:true,api_error_status:401,result:"Failed to authenticate. API Error: 401 User not found.",modelUsage:{}}));
+  process.exit(1);
+}
 if (process.env.FAKE_INVALID_MODEL === "1") {
   console.error("The requested model is not supported with this account.");
   process.exit(1);
@@ -1266,6 +1271,14 @@ describe("gateway lanes", () => {
   it("classifies an endpoint authentication error as unauthenticated", async () => {
     process.env.FAKE_AUTH_ERROR = "1";
     const input = gatewayOptions("deepseek", "endpoint-401");
+    const result = await runLane(input);
+    expect(result.exitCode).toBe(77);
+    expect(receipt(input.receiptPath).status).toBe("unauthenticated");
+  });
+
+  it("classifies Claude Code's own 401 result as unauthenticated", async () => {
+    process.env.FAKE_AUTH_ERROR = "claude-401";
+    const input = gatewayOptions("openrouter", "claude-401");
     const result = await runLane(input);
     expect(result.exitCode).toBe(77);
     expect(receipt(input.receiptPath).status).toBe("unauthenticated");
