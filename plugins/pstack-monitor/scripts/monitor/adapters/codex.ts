@@ -39,7 +39,8 @@ const IGNORED_TYPES = new Set([
 
 /** Paths and commands only pstack's skills and runner use. */
 const PSTACK_MARKERS = ["pstack-runner", "pstack-flex/pstack/", "open-pstack/pstack/", "/pstack/skills/"];
-const PSTACK_WORD = /\bpstack\b/i;
+// "pstack" as its own word; "pstack-flex" (the repo) and "pstack-monitor" (this plugin) are not requests for pstack.
+const PSTACK_WORD = /\bpstack(?![-\w])/i;
 
 const IGNORED_ITEMS = new Set(["ghost_snapshot"]);
 

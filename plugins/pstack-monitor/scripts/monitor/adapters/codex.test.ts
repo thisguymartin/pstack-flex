@@ -116,9 +116,12 @@ describe("rollout", () => {
     const rootMeta = record(0, "session_meta", { id: parentThread, cwd: "/repo", source: "cli", cli_version: "0.160.0" });
     const ask = (text: string) => record(1, "response_item", { type: "message", role: "user", content: [{ type: "input_text", text }] });
     const shell = (cmd: string) => record(1, "response_item", { type: "function_call", name: "exec_command", arguments: JSON.stringify({ cmd }), call_id: "c1" });
-    expect(flagged(parentThread, rootMeta, ask("Use pstack:monitor."))).toBe(true);
+    expect(flagged(parentThread, rootMeta, ask("Use pstack:poteto-mode."))).toBe(true);
+    expect(flagged(parentThread, rootMeta, ask("Use pstack for this bug"))).toBe(true);
     expect(flagged(parentThread, rootMeta, ask("Fix the parser"))).toBe(false);
-    expect(flagged(childThread, childMeta(), ask("Use pstack:monitor."))).toBe(false);
+    expect(flagged(parentThread, rootMeta, ask("Fix the typo in the pstack-flex README"))).toBe(false);
+    expect(flagged(parentThread, rootMeta, ask("Use pstack-monitor:monitor."))).toBe(false);
+    expect(flagged(childThread, childMeta(), ask("Use pstack:poteto-mode."))).toBe(false);
     expect(flagged(parentThread, rootMeta, shell("pstack-runner --parent codex --provider minimax"))).toBe(true);
     expect(flagged(parentThread, rootMeta, shell("cat ~/.codex/plugins/cache/open-pstack/pstack/1.5.0/skills/arena/SKILL.md"))).toBe(true);
     expect(flagged(parentThread, rootMeta, shell("cat ~/.codex/plugins/cache/pstack-flex/pstack/1.5.0/skills/arena/SKILL.md"))).toBe(true);

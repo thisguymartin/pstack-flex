@@ -5,6 +5,7 @@
 - The marketplace is now `pstack-flex` (was `open-pstack`) in both the Claude Code and Codex marketplace files. Install with `pstack@pstack-flex`. The plugin keeps the name `pstack`, so skill names such as `pstack:poteto-mode` are unchanged. Manifests, package names, and docs point at `thisguymartin/pstack-flex`; attribution to open-pstack, pstack-claude, and Cursor pstack stays in README and NOTICE.
 - The agent monitor moves out of the `pstack` plugin into its own plugin, `pstack-monitor`, in the same marketplace. It has its own manifests, version (1.0.0), Bun package, and CI steps. Its skill is now `pstack-monitor:monitor` and its launcher is `scripts/monitor/pstack-monitor` under that plugin. Users who want the monitor install it separately.
 - The monitor reaches the pstack plugin only through the lane journal. `scripts/monitor/lane-contract.ts` restates the journal's shapes, a repository test fails when they drift from the runner's types, and a static check fails if monitor code imports the runner directly.
+- Fixes: `codex-tools.md` now says the default panel runs four lanes across three providers (it said four providers). `docs/LANES.md` replaces the stale claim that OpenRouter needs a local translator with OpenRouter's documented Claude Code connection and the probes from [#7](https://github.com/thisguymartin/pstack-flex/issues/7). The monitor's Codex rule no longer treats "pstack-flex" or "pstack-monitor" in a prompt as a request for pstack.
 
 ## Unreleased: agent monitor
 
