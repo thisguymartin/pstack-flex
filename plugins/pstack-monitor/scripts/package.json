@@ -1,0 +1,13 @@
+{
+  "name": "@pstack-flex/monitor",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "\"$npm_execpath\" test --parallel monitor",
+    "typecheck": "tsc --project monitor/tsconfig.json --noEmit --strict && tsc --project monitor/web/tsconfig.json --noEmit --strict"
+  },
+  "devDependencies": {
+    "bun-types": "1.3.14",
+    "typescript": "7.0.2"
+  }
+}

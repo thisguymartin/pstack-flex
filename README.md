@@ -146,13 +146,20 @@ That is the main workflow. The other skills are there when poteto-mode needs the
 
 ### 3. Watch your agents (optional)
 
-The monitor does not start by itself. Start it when you want to watch a run:
+The monitor is a separate plugin in the same marketplace, so install it only if you want it:
 
 ```text
-/pstack:monitor
+/plugin install pstack-monitor@pstack-flex      # Claude Code
+codex plugin add pstack-monitor@pstack-flex     # Codex
 ```
 
-In Codex, ask for `pstack:monitor`. It prints a link to a local page that draws each session running pstack, the agents it spawned, the external lanes pstack launched, and what each one is doing now, live. It keeps running in the background until you say "pstack, kill the monitor" or restart the machine. See [Watching your agents](docs/USAGE.md#watching-your-agents-the-monitor) for the terminal commands and troubleshooting.
+It does not start by itself. Start it when you want to watch a run:
+
+```text
+/pstack-monitor:monitor
+```
+
+In Codex, ask for `pstack-monitor:monitor`. It prints a link to a local page that draws each session running pstack, the agents it spawned, the external lanes pstack launched, and what each one is doing now, live. It keeps running in the background until you say "pstack, kill the monitor" or restart the machine. See [Watching your agents](docs/USAGE.md#watching-your-agents-the-monitor) for the terminal commands and troubleshooting.
 
 ## Useful skills
 

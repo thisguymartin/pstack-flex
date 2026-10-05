@@ -1,5 +1,11 @@
 # CHANGES — applied substitutions
 
+## Unreleased: pstack-flex becomes its own distribution
+
+- The marketplace is now `pstack-flex` (was `open-pstack`) in both the Claude Code and Codex marketplace files. Install with `pstack@pstack-flex`. The plugin keeps the name `pstack`, so skill names such as `pstack:poteto-mode` are unchanged. Manifests, package names, and docs point at `thisguymartin/pstack-flex`; attribution to open-pstack, pstack-claude, and Cursor pstack stays in README and NOTICE.
+- The agent monitor moves out of the `pstack` plugin into its own plugin, `pstack-monitor`, in the same marketplace. It has its own manifests, version (1.0.0), Bun package, and CI steps. Its skill is now `pstack-monitor:monitor` and its launcher is `scripts/monitor/pstack-monitor` under that plugin. Users who want the monitor install it separately.
+- The monitor reaches the pstack plugin only through the lane journal. `scripts/monitor/lane-contract.ts` restates the journal's shapes, a repository test fails when they drift from the runner's types, and a static check fails if monitor code imports the runner directly.
+
 ## Unreleased: agent monitor
 
 - Add `/pstack:monitor` and `pstack-monitor`, a read-only local server that draws pstack work on this machine as a live node canvas: each session that runs pstack, every subagent it spawns, and external Codex, Grok, DeepSeek, and MiniMax lanes, with each agent's model and messages. `--all` or **Show all** shows every session. Tracked in [pstack-flex #23](https://github.com/thisguymartin/pstack-flex/issues/23).

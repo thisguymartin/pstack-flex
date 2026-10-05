@@ -56,14 +56,17 @@ The marketplace install is the normal user path. Direct links are only for testi
 .
 ├── .claude-plugin/marketplace.json   # Claude Code marketplace manifest (repo root)
 ├── .agents/plugins/marketplace.json  # Codex marketplace manifest (repo root)
-├── plugins/pstack/                   # the plugin itself
+├── plugins/pstack/                   # the pstack plugin
 │   ├── .claude-plugin/plugin.json    # Claude Code manifest
 │   ├── .codex-plugin/plugin.json     # Codex manifest (skills: ./skills/)
 │   ├── skills/                       # 55 skills shared by Claude Code and Codex
 │   │   ├── poteto-mode/references/{codex-tools,provider-dispatch}.md  # tool + provider routing
-│   │   └── poteto-mode/scripts/      # bun/bash/node tooling: watch-pr, orch, runner, monitor, check-plan.mjs, worktree-audit.sh
+│   │   └── poteto-mode/scripts/      # bun/bash/node tooling: watch-pr, orch, runner, check-plan.mjs, worktree-audit.sh
 │   ├── hooks/                        # SessionStart opt-in gate: pstack runs only on request (Claude Code and Codex)
 │   └── agents/                       # Claude subagents, including native Fable and Opus lanes at each selectable effort
+├── plugins/pstack-monitor/           # optional agent monitor plugin (its own manifests, skill, and Bun package)
+│   ├── skills/monitor/SKILL.md       # start, stop, status, doctor
+│   └── scripts/monitor/              # server, adapters, web UI, lane-contract.ts (the lane journal interface)
 ├── tests/skill-collision-repro.sh    # native-skill package invariants and Claude invocation checks
 ├── LICENSE                           # pstack upstream MIT
 ├── LICENSE-cursor-team-kit           # cursor-team-kit upstream MIT
@@ -151,11 +154,11 @@ The table uses the short upstream names. Claude Code exposes each native skill w
 | `/fix-merge-conflicts` | non-interactively resolve merge conflicts, validate, finalize |
 | `/get-pr-comments` | fetch and summarize review comments from the active PR |
 | `/what-did-i-get-done` | summarize authored commits over a user-chosen period |
-| `/monitor` | open a live local view of running agents, their spawn tree, and each agent's activity (pstack-flex) |
+| `/pstack-monitor:monitor` | open a live local view of running agents, their spawn tree, and each agent's activity (separate `pstack-monitor` plugin) |
 
 ## Agent monitor
 
-`/monitor` starts `skills/poteto-mode/scripts/monitor/pstack-monitor`, a read-only server on `127.0.0.1` (default port 47317), and prints a link with a per-start access token. The page draws one session's agents as a node canvas and streams any agent's timeline in a resizable side panel.
+The monitor is a separate plugin, `plugins/pstack-monitor/`, installed as `pstack-monitor@pstack-flex`. Its only interface with the pstack plugin is the lane journal, restated in `scripts/monitor/lane-contract.ts`; a repository test fails when that copy drifts from the runner's types. `/pstack-monitor:monitor` starts `scripts/monitor/pstack-monitor`, a read-only server on `127.0.0.1` (default port 47317), and prints a link with a per-start access token. The page draws one session's agents as a node canvas and streams any agent's timeline in a resizable side panel.
 
 - **Scope.** The server indexes every Claude Code and Codex session and marks a spawn tree as pstack work when any member shows pstack evidence: `attributionPlugin`/`attributionSkill`/`attributionAgent` on Claude records, a `Skill` or `Agent` call naming `pstack:`, a `/pstack:` command, a `pstack:` subagent sidecar, a Codex root prompt naming pstack or a call into `pstack-runner` or pstack's skills, or any runner lane. The page shows marked trees by default; **Show all** or `?all=1` (`start --all`) shows everything.
 - **Sources.** Claude Code session and subagent transcripts, `.meta.json` sidecars, and `~/.claude/sessions/<pid>.json` process records; Codex rollouts under `~/.codex/sessions/`. No hook, no harness setting. `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and `PSTACK_FLEX_MONITOR_DIR` move them.

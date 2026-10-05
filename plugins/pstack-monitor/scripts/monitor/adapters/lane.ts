@@ -1,6 +1,5 @@
 import { relative, sep } from "node:path";
-import type { LaneRecord } from "../../runner/flex-journal.ts";
-import type { ReceiptStatus, RunnerReceipt } from "../../runner/types.ts";
+import type { LaneReceipt, LaneRecord, ReceiptStatus } from "../lane-contract.ts";
 import {
   NOTHING,
   parsed,
@@ -227,7 +226,7 @@ export function laneAdapter(root: string): Adapter {
       if (record === null) return problem({ kind: "shape", recordType: location.file, detail: "not a JSON object" });
       const id = laneId(location.lane);
       if (location.file === "lane.json") return laneRecord(path, id, record as Partial<LaneRecord>);
-      return laneReceipt(id, record as Partial<RunnerReceipt>);
+      return laneReceipt(id, record as Partial<LaneReceipt>);
     },
 
     removed(path: string) {
@@ -290,7 +289,7 @@ const RECEIPT_STATUSES = new Set<string>([
   "malformed-output",
 ]);
 
-function laneReceipt(id: AgentId, receipt: Partial<RunnerReceipt>): Parsed {
+function laneReceipt(id: AgentId, receipt: Partial<LaneReceipt>): Parsed {
   const status = text(receipt.status);
   const provider = text(receipt.provider);
   if (status === null || !RECEIPT_STATUSES.has(status) || provider === null) {

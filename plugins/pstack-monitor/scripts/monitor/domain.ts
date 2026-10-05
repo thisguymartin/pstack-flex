@@ -1,4 +1,4 @@
-import type { AccessMode, NormalizedUsage, ReceiptStatus } from "../runner/types.ts";
+import type { AccessMode, NormalizedUsage, ReceiptStatus } from "./lane-contract.ts";
 
 // pstack-flex addition. Shared by the monitor server and the browser bundle,
 // so this file imports nothing from Bun, Node, or the DOM.

@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { lanesRoot } from "../runner/flex-journal.ts";
+import { LANES_DIR_VAR } from "./lane-contract.ts";
 import type { Adapter } from "./adapter.ts";
 import { claudeAdapter } from "./adapters/claude.ts";
 import { codexAdapter } from "./adapters/codex.ts";
@@ -20,6 +20,11 @@ export interface Homes {
 function configured(env: NodeJS.ProcessEnv, name: string): string | null {
   const value = env[name];
   return value !== undefined && value.trim().length > 0 ? value : null;
+}
+
+/** The runner's lane journal directory; must match the runner's own lanesRoot. */
+export function lanesRoot(env: NodeJS.ProcessEnv = process.env): string {
+  return configured(env, LANES_DIR_VAR) ?? join(homedir(), ".pstack-flex", "lanes");
 }
 
 export function homes(env: NodeJS.ProcessEnv = process.env): Homes {

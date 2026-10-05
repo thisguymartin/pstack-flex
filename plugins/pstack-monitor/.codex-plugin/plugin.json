@@ -1,0 +1,23 @@
+{
+  "name": "pstack-monitor",
+  "version": "1.0.0",
+  "description": "A live, read-only local view of pstack work: Claude Code and Codex sessions, their subagents, and pstack's external model lanes, with what each agent is doing now.",
+  "author": {
+    "name": "Martin Patino"
+  },
+  "homepage": "https://github.com/thisguymartin/pstack-flex",
+  "repository": "https://github.com/thisguymartin/pstack-flex",
+  "license": "MIT",
+  "keywords": ["pstack", "monitor", "agents", "observability", "subagents"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "pstack monitor",
+    "shortDescription": "Watch pstack's agents and model lanes live in a local browser view",
+    "longDescription": "Starts a read-only local server that draws each pstack session, its subagents, and its external Codex, Grok, DeepSeek, and MiniMax lanes as a live graph. Optional companion to the pstack plugin.",
+    "developerName": "pstack-flex maintainers",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Read"],
+    "defaultPrompt": ["Show me the agents."],
+    "websiteURL": "https://github.com/thisguymartin/pstack-flex"
+  }
+}

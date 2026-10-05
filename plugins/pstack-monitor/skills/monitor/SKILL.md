@@ -14,7 +14,7 @@ Run one command and relay its output.
 | stop, kill, close, or shut down the monitor | `pstack-monitor stop` |
 | check whether it is running, or get the link again | `pstack-monitor status` |
 
-The launcher is `skills/poteto-mode/scripts/monitor/pstack-monitor` under the installed plugin. Pass the harness you are running in as `--parent`.
+The launcher is `scripts/monitor/pstack-monitor` under the installed `pstack-monitor` plugin. Pass the harness you are running in as `--parent`.
 
 `start` returns at once and prints one link. Give the user that link exactly as printed. The link carries an access token: never paste it anywhere else, and never open it with a fetch tool.
 

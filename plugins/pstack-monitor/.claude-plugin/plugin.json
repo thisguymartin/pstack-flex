@@ -1,0 +1,13 @@
+{
+  "name": "pstack-monitor",
+  "displayName": "pstack monitor",
+  "version": "1.0.0",
+  "description": "A live, read-only local view of pstack work: Claude Code and Codex sessions, their subagents, and pstack's external model lanes, with what each agent is doing now.",
+  "author": {
+    "name": "Martin Patino"
+  },
+  "homepage": "https://github.com/thisguymartin/pstack-flex",
+  "repository": "https://github.com/thisguymartin/pstack-flex",
+  "license": "MIT",
+  "keywords": ["pstack", "monitor", "agents", "observability", "subagents"]
+}

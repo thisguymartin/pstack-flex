@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 // code changes, so `start` can replace a server left over from another build.
 
 const MONITOR_DIR = fileURLToPath(new URL(".", import.meta.url));
-const PLUGIN_DIR = join(MONITOR_DIR, "..", "..", "..", "..");
+const PLUGIN_DIR = join(MONITOR_DIR, "..", "..");
 
 function pluginVersion(): string {
   for (const manifest of [".claude-plugin", ".codex-plugin"]) {

@@ -237,18 +237,25 @@ Status comes from evidence:
 
 ### Start and stop
 
+The monitor ships as its own plugin, `pstack-monitor`, in the same marketplace. Install it once:
+
+```text
+/plugin install pstack-monitor@pstack-flex      # Claude Code
+codex plugin add pstack-monitor@pstack-flex     # Codex
+```
+
 Nothing starts the monitor for you. Start it once; it runs in the background until you stop it or restart the machine.
 
 ```text
-/pstack:monitor          # Claude Code
-Use pstack:monitor.      # Codex
+/pstack-monitor:monitor          # Claude Code
+Use pstack-monitor:monitor.      # Codex
 ```
 
 Either prints a link such as `http://127.0.0.1:47317/?token=…`. The token changes on every start. From a terminal, run the launcher inside the installed plugin (it needs Bun):
 
 ```shell
-~/.claude/plugins/cache/open-pstack/pstack/<version>/skills/poteto-mode/scripts/monitor/pstack-monitor start --parent claude
-~/.codex/plugins/cache/open-pstack/pstack/<version>/skills/poteto-mode/scripts/monitor/pstack-monitor start --parent codex
+~/.claude/plugins/cache/pstack-flex/pstack-monitor/<version>/scripts/monitor/pstack-monitor start --parent claude
+~/.codex/plugins/cache/pstack-flex/pstack-monitor/<version>/scripts/monitor/pstack-monitor start --parent codex
 ```
 
 Options: `--all`, `--port <n>` (default 47317), `--hours <n>` (default 24), `--focus <session id>`.
