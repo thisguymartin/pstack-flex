@@ -1,4 +1,4 @@
-# open-pstack technical reference
+# pstack-flex technical reference
 
 This page contains the full skill, dependency, runtime, and porting reference. For the plain-English introduction and quick start, see the [main README](../README.md).
 
@@ -17,8 +17,8 @@ This is not a verbatim copy. Skill bodies have been edited so every Cursor-speci
 This repo ships as a Claude Code marketplace containing one plugin (`pstack`).
 
 ```text
-/plugin marketplace add ericlitman/open-pstack
-/plugin install pstack@open-pstack
+/plugin marketplace add thisguymartin/pstack-flex
+/plugin install pstack@pstack-flex
 /reload-plugins
 ```
 
@@ -29,8 +29,8 @@ pstack runs only when you ask for it. A `SessionStart` hook on startup, `/clear`
 The same plugin carries a `.codex-plugin/plugin.json` manifest and a root `.agents/plugins/marketplace.json`. Install it through the Codex marketplace:
 
 ```shell
-codex plugin marketplace add ericlitman/open-pstack --ref main
-codex plugin add pstack@open-pstack
+codex plugin marketplace add thisguymartin/pstack-flex --ref main
+codex plugin add pstack@pstack-flex
 ```
 
 Codex discovers the plugin skills under the `pstack` namespace, so they list as `pstack:poteto-mode`, `pstack:tdd`, and so on. The namespace comes from `plugins/pstack/.codex-plugin/plugin.json`. To enable the multi-model and parallel-subagent skills (`interrogate`, `arena`, `how`, `why`, `reflect`, `architect`), turn on subagents in `~/.codex/config.toml`:
@@ -43,8 +43,8 @@ multi_agent = true
 For local plugin development, you can clone the repository and link its skills directly:
 
 ```shell
-git clone https://github.com/ericlitman/open-pstack
-cd open-pstack
+git clone https://github.com/thisguymartin/pstack-flex
+cd pstack-flex
 for s in plugins/pstack/skills/*/; do ln -s "$PWD/$s" ~/.agents/skills/"$(basename "$s")"; done
 ```
 
@@ -56,10 +56,10 @@ The marketplace install is the normal user path. Direct links are only for testi
 .
 ├── .claude-plugin/marketplace.json   # Claude Code marketplace manifest (repo root)
 ├── .agents/plugins/marketplace.json  # Codex marketplace manifest (repo root)
-├── plugins/pstack/                   # the plugin itself
+├── plugins/pstack/                   # the pstack plugin
 │   ├── .claude-plugin/plugin.json    # Claude Code manifest
 │   ├── .codex-plugin/plugin.json     # Codex manifest (skills: ./skills/)
-│   ├── skills/                       # 55 skills shared by Claude Code and Codex
+│   ├── skills/                       # 56 skills shared by Claude Code and Codex
 │   │   ├── poteto-mode/references/{codex-tools,provider-dispatch}.md  # tool + provider routing
 │   │   └── poteto-mode/scripts/      # bun/bash/node tooling: watch-pr, orch, runner, check-plan.mjs, worktree-audit.sh
 │   ├── hooks/                        # SessionStart opt-in gate: pstack runs only on request (Claude Code and Codex)
@@ -82,13 +82,13 @@ Plugin-internal `skills/<name>/` path references in the docs below are relative 
 The Codex build shares one `skills/` tree with the Claude Code build. Nothing is forked or generated. Two narrow references keep runtime translation separate: `codex-tools.md` maps harness primitives and `provider-dispatch.md` maps model providers. pstack otherwise keeps the upstream Claude-native prose and adds a one-line Platform note to each skill that names a Claude primitive, so the port stays in lockstep with upstream sync.
 
 - **Skill invocation.** Codex loads `SKILL.md` natively. There is no `Skill` tool. You invoke a skill by name (ask for it, or pick `pstack:poteto-mode` from the list).
-- **Package surface.** The native `skills/` tree is the only workflow source. The plugin ships no `commands/` layer and does not link prompts into `~/.codex/prompts/`. Codex would migrate such files into duplicate source-command skills while loading the native skill tree. The 23 `principle-*` leaves declare `user-invocable: false`. Claude keeps them out of its user picker; Codex 0.149.0 currently shows them despite that metadata ([#8](https://github.com/ericlitman/open-pstack/issues/8)).
+- **Package surface.** The native `skills/` tree is the only workflow source. The plugin ships no `commands/` layer and does not link prompts into `~/.codex/prompts/`. Codex would migrate such files into duplicate source-command skills while loading the native skill tree. The 23 `principle-*` leaves declare `user-invocable: false`. Claude keeps them out of its user picker; Codex 0.149.0 currently shows them despite that metadata ([open-pstack #8](https://github.com/ericlitman/open-pstack/issues/8)).
 - **Tool and built-in mapping.** Claude tool names and built-in skills resolve through [`codex-tools.md`](../plugins/pstack/skills/poteto-mode/references/codex-tools.md). Model execution resolves separately through [`provider-dispatch.md`](../plugins/pstack/skills/poteto-mode/references/provider-dispatch.md), so Codex can keep Sol native while invoking Claude and Grok externally.
 - **Subagents.** The `Agent` tool maps to Codex `spawn_agent` / `wait_agent`, enabled by `multi_agent = true`. Parallel fan-out is multiple `spawn_agent` calls in one turn. If the native Codex lane is unavailable, record that lane as a dropout; external Claude and Grok lanes still run, and no provider is silently substituted. There is no `poteto-agent` subagent type on Codex; route ad-hoc subagents by dispatching a `spawn_agent` told to read `poteto-mode` first.
-- **Opt-in.** Codex runs the plugin's `hooks/` SessionStart hook and adds the opt-in gate to each session as a developer message (observed on Codex 0.157.1). Codex records trust for the hook in `~/.codex/config.toml` under `hooks.state`. Enter `pstack:poteto-mode` by name, or add a standing instruction to `~/.codex/AGENTS.md` if you want every non-trivial task routed into it. After a plugin update, run `codex plugin marketplace upgrade open-pstack` so the installed copy carries the current gate.
+- **Opt-in.** Codex runs the plugin's `hooks/` SessionStart hook and adds the opt-in gate to each session as a developer message (observed on Codex 0.157.1). Codex records trust for the hook in `~/.codex/config.toml` under `hooks.state`. Enter `pstack:poteto-mode` by name, or add a standing instruction to `~/.codex/AGENTS.md` if you want every non-trivial task routed into it. After a plugin update, run `codex plugin marketplace upgrade pstack-flex` so the installed copy carries the current gate.
 - **Models.** `/setup-pstack` writes provider-qualified descriptors and asks one requested effort per assigned family (`low`, `medium`, `high`, `xhigh`, `max`). The first-run panel is Fable max, GPT-6 Astra high, Grok 4.7 xhigh, and Opus max. Fable and Opus use Claude's rolling aliases. Runtime dispatch normalizes older versioned descriptors in memory, so an installed sheet stops pinning immediately. A setup rerun persists that migration while keeping each role's family and effort. The GPT-6 Astra, Sol, and Luna Codex families are stock: GPT-6 Sol high carries `feature, refactoring`, `bug-fix`, `perf-issue`, and `hillclimb`; Luna high carries `how explorer` and `swarm workers`; Astra high sits on every panel. GPT-5.6 Sol remains a selectable family. In Codex, every Codex family uses native `spawn_agent`; Claude and Grok use the deterministic external runner. In Claude Code, Fable and Opus use native agents; the Codex families and Grok use the runner. Children never detect the parent or reroute themselves. The solo code roles stay on a Codex model instead of upstream's Fable default because it costs less for these frequent delegated code roles.
 
-Verified in fresh installed Claude Code and Codex sessions: the user-facing skills are discovered and namespaced under `pstack`; both parents fan out the configured panel through the documented native/external route table, retain long-running handles without a default timeout, and cross-judge only after every candidate is terminal. The `principle-*` leaves remain available for `poteto-mode` to read by path. Claude honors their `user-invocable: false` metadata; Codex 0.149.0 does not ([#8](https://github.com/ericlitman/open-pstack/issues/8)).
+Verified upstream in fresh installed open-pstack Claude Code and Codex sessions (pstack-flex's own live-test record is in [LIVE-GATE.md](LIVE-GATE.md)): the user-facing skills are discovered and namespaced under `pstack`; both parents fan out the configured panel through the documented native/external route table, retain long-running handles without a default timeout, and cross-judge only after every candidate is terminal. The `principle-*` leaves remain available for `poteto-mode` to read by path. Claude honors their `user-invocable: false` metadata; Codex 0.149.0 does not ([open-pstack #8](https://github.com/ericlitman/open-pstack/issues/8)).
 
 ## Dependencies
 
@@ -137,6 +137,8 @@ The table uses the short upstream names. Claude Code exposes each native skill w
 | `/figure-it-out` | design a rigorous, auditable playbook for a task no bundled playbook fits |
 | `/show-me-your-work` | log decisions to a reviewable tsv decision trail |
 | `/blast-radius` | find what a change could break beyond the diff and prove safety by running code |
+| `/intake` | turn GitHub issues into ready-to-run poteto-mode briefs with a playbook, exit condition, and worktree (pstack-flex) |
+| `/diff-behavior` | run the same scenarios on trunk and head and classify every observable difference as intended, unintended, or noise (pstack-flex) |
 | `/recall` | catch up on recent working context from chat history, live state, and the shared record |
 | `/setup-pstack` | configure pstack per-role model choices and per-family requested effort |
 | `/unslop` | clean up writing by removing AI tells |

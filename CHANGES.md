@@ -1,5 +1,11 @@
 # CHANGES — applied substitutions
 
+## Unreleased: pstack-flex becomes its own distribution
+
+- The marketplace is now `pstack-flex` (was `open-pstack`) in both the Claude Code and Codex marketplace files. Install with `pstack@pstack-flex`. The plugin keeps the name `pstack`, so skill names such as `pstack:poteto-mode` are unchanged. Manifests, package names, and docs point at `thisguymartin/pstack-flex`; attribution to open-pstack, pstack-claude, and Cursor pstack stays in README and NOTICE.
+- New skills: `intake` ([#10](https://github.com/thisguymartin/pstack-flex/issues/10)) turns GitHub issues into ready-to-run poteto-mode briefs with a playbook, an observable exit condition, a verification plan, and a worktree; it is read-only and parks briefs with open product questions. `diff-behavior` ([#15](https://github.com/thisguymartin/pstack-flex/issues/15)) runs the same scenarios on trunk and head through `swarm`, normalizes, and classifies every difference as intended, unintended, or noise. Neither changes an upstream skill body; wiring them into poteto-mode and the multi-phase-plan regression lane is a follow-up.
+- Fixes: `codex-tools.md` now says the default panel runs four lanes across three providers (it said four providers). `docs/LANES.md` replaces the stale claim that OpenRouter needs a local translator with OpenRouter's documented Claude Code connection and the probes from [#7](https://github.com/thisguymartin/pstack-flex/issues/7).
+
 ## Unreleased: lane journal
 
 - `pstack-runner` writes an opt-in lane journal (start record with the head of the prompt, stdout as it arrives, receipt copy) under `~/.pstack-flex/lanes/` while that directory exists. `--label` names a lane. A journal failure never changes a lane's receipt, exit status, or output. [psf-monitor](https://github.com/thisguymartin/psf-monitor) reads the journal to show lanes while they run; the agent monitor that first shipped here moved there. Tracked in [pstack-flex #23](https://github.com/thisguymartin/pstack-flex/issues/23).

@@ -126,7 +126,7 @@ Quality note: this trades peak capability for cost control. The hardest-task rol
 
 ## Optional lanes
 
-- **OpenRouter (off by default).** OpenRouter has no Anthropic-format endpoint, so a lane needs a local translator that serves `/v1/messages` — musistudio/claude-code-router or a version-pinned LiteLLM — with `ANTHROPIC_BASE_URL` pointed at it. That is one extra long-running local process, which is why it is documented rather than shipped. Expect roughly a 5.5% credit fee on top of provider list prices. If you build it, model it as another gateway provider in `flex-providers.ts`.
+- **OpenRouter (not shipped).** OpenRouter documents a direct Claude Code connection (`ANTHROPIC_BASE_URL=https://openrouter.ai/api`, `ANTHROPIC_AUTH_TOKEN` from `OPENROUTER_API_KEY`, and an explicitly empty `ANTHROPIC_API_KEY`), so no local translator is needed. It guarantees that route only for Anthropic models, so DeepSeek, MiniMax, and other catalog models through OpenRouter must pass the live probes in [issue #7](https://github.com/thisguymartin/pstack-flex/issues/7) (tool call, second turn, effort, model identity) before a lane ships. If it does, model it as another gateway provider in `flex-providers.ts`. Expect a credit fee on top of provider list prices; check OpenRouter's current pricing page.
 - **Local via Ollama (planned).** Ollama serves an Anthropic-compatible API since v0.14, so a `local` gateway provider pointed at it is the natural next lane: full compute control, zero per-token cost, your hardware. Not wired in yet.
 
 ## Adding a gateway provider
