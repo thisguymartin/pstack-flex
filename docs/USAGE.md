@@ -218,64 +218,11 @@ Every external lane writes a JSON receipt next to its output. The fields that ma
 | `usage` | real token counts — trust these |
 | `costUsd` | real for claude/grok subscription lanes; **always `null` on gateway lanes** (the CLI would price at Anthropic rates). Multiply `usage` by the [LANES.md](LANES.md) table instead |
 
-## Watching your agents: the monitor
+## Watching your agents
 
-The monitor is a local web page that shows pstack work on this machine as a live graph. Each session that runs pstack appears with every agent it spawned: native Claude and Codex subagents, and external Codex, Grok, DeepSeek, and MiniMax lanes. Click an agent to see its task, what it is doing now, and its full activity.
+The agent monitor moved to its own plugin, [psf-monitor](https://github.com/thisguymartin/psf-monitor). It draws each pstack session, the agents it spawned, and the external lanes pstack launched as a live graph, and can cancel a running lane.
 
-A session counts as pstack work once it runs a `/pstack:` command, a pstack skill, or a pstack agent (in Codex, a prompt that names pstack or a call into pstack's skills or runner). **Show all** in the session list, or `start --all`, shows every session instead.
-
-Status comes from evidence:
-
-| Shown | Meaning |
-| --- | --- |
-| working | the process is busy, or the agent is mid-turn |
-| waiting for input | the session's process is open and idle |
-| stalled | a turn started and has been silent for 15 minutes with no live process behind it |
-| quiet | still working, but nothing new for 90 seconds |
-| done, failed, cancelled | the agent or lane recorded an outcome |
-| ended · process gone | the process exited without an outcome |
-
-### Start and stop
-
-Nothing starts the monitor for you. Start it once; it runs in the background until you stop it or restart the machine.
-
-```text
-/pstack:monitor          # Claude Code
-Use pstack:monitor.      # Codex
-```
-
-Either prints a link such as `http://127.0.0.1:47317/?token=…`. The token changes on every start. From a terminal, run the launcher inside the installed plugin (it needs Bun):
-
-```shell
-~/.claude/plugins/cache/open-pstack/pstack/<version>/skills/poteto-mode/scripts/monitor/pstack-monitor start --parent claude
-~/.codex/plugins/cache/open-pstack/pstack/<version>/skills/poteto-mode/scripts/monitor/pstack-monitor start --parent codex
-```
-
-Options: `--all`, `--port <n>` (default 47317), `--hours <n>` (default 24), `--focus <session id>`.
-
-| Ask pstack | Or run | What happens |
-| --- | --- | --- |
-| "pstack, kill the monitor" | `pstack-monitor stop` | Stops the server. Agents keep running. |
-| "is the monitor running?" | `pstack-monitor status` | Prints counts and the link. |
-| | `pstack-monitor doctor` | Reports how well recent transcripts parsed. |
-| | `pstack-monitor journal off` | Stops recording lanes and deletes the records. |
-
-### External lanes
-
-The first `start` turns on the lane journal in `~/.pstack-flex/lanes/`, kept for 7 days, so lanes show while they run. Codex and Grok lanes stream. Claude, DeepSeek, and MiniMax lanes show their reply when they exit. Lanes started while the journal was off do not appear.
-
-The monitor reads the transcripts in `~/.claude` and `~/.codex` (or `CLAUDE_CONFIG_DIR` and `CODEX_HOME`), writes only `~/.pstack-flex/monitor/` and the journal, listens on `127.0.0.1` only, and accepts no writes.
-
-### When something looks wrong
-
-| Symptom | Fix |
-| --- | --- |
-| `port 47317 is unavailable` | `pstack-monitor start --port 47400` |
-| "Link expired" | the monitor restarted; run start again and open the new link |
-| Start fails in a sandboxed session | run the start command in your own terminal (in Claude Code, after `!`) |
-| A session is missing | it has not run pstack yet; click **Show all** |
-| A banner says a source is degraded | run `pstack-monitor doctor` and open an issue with its output |
-| An external lane never appears | `pstack-monitor journal status`, then `journal on` |
+pstack's side is the lane journal. While `~/.pstack-flex/lanes/` exists, `pstack-runner` records each external lane's start, its output as it streams, and a copy of its receipt there. psf-monitor creates that directory when it starts. Delete the directory to stop journaling. A journal failure never changes a lane's receipt, exit status, or output.
 
 ## Cost playbook
 
