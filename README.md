@@ -174,7 +174,9 @@ In Codex, ask for `pstack-monitor:monitor`. It prints a link to a local page tha
 | `maintain-verification-skill` | The project's verification instructions no longer match the product. |
 | `babysit` | A pull request needs CI failures and review comments handled until it is ready. |
 | `reflect` | A hard task is finished and its lessons should improve the next run. |
-| `monitor` | You want to watch your agents work: a live graph of each pstack session, its subagents and model lanes, and what each is doing now. |
+| `intake` | You have GitHub issues and want each turned into a ready-to-run brief with a playbook, an observable exit condition, and a worktree. |
+| `diff-behavior` | You want to know what a change did from the outside: the same scenarios on trunk and head, with every unclaimed difference flagged. |
+| `pstack-monitor:monitor` | You want to watch your agents work: a live graph of each pstack session, its subagents and model lanes, and what each is doing now. Separate plugin. |
 
 Plugin skills include `pstack:` in their name. In Claude Code, invoke a native skill such as `/pstack:architect`. In Codex, ask for the skill, such as `Use pstack:architect for this design.` See the [technical reference](docs/reference.md) for the full list.
 

@@ -37,6 +37,7 @@ All flex changes are additive and live in port-owned files so upstream merges st
 - The assignment-first restructure of `skills/setup-pstack/SKILL.md`
 - `docs/LANES.md`, this file, the README fork section, and the NOTICE/LICENSE/CHANGES additions
 - `plugins/pstack/hooks/session-start-context.md`, which the fork rewrote from open-pstack's auto-fire mandate into an opt-in gate, and the docs lines that describe it
+- The `intake` and `diff-behavior` skills: `plugins/pstack/skills/intake/` and `plugins/pstack/skills/diff-behavior/`. Upstream has no equivalent, so they never conflict.
 - The agent monitor plugin: everything under `plugins/pstack-monitor/`, its marketplace entries, its CI steps, and the "Agent monitor" section of `docs/reference.md`. Upstream has no equivalent, so none of these conflict on a sync.
 - The lane journal: `runner/flex-journal.ts` and its test (new), its call sites in `runner/{types,run,cli}.ts` (an optional stdout callback on the model run, the journal opened after output reservation and finished on both return paths, and the `--label` flag), the journal tests in `run.test.ts`, and the pstack-flex paragraph after the invocation block in `references/provider-dispatch.md`. On a sync, keep these call sites; they change no receipt or exit status.
 

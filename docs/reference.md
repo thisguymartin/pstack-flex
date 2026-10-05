@@ -59,7 +59,7 @@ The marketplace install is the normal user path. Direct links are only for testi
 ├── plugins/pstack/                   # the pstack plugin
 │   ├── .claude-plugin/plugin.json    # Claude Code manifest
 │   ├── .codex-plugin/plugin.json     # Codex manifest (skills: ./skills/)
-│   ├── skills/                       # 55 skills shared by Claude Code and Codex
+│   ├── skills/                       # 56 skills shared by Claude Code and Codex
 │   │   ├── poteto-mode/references/{codex-tools,provider-dispatch}.md  # tool + provider routing
 │   │   └── poteto-mode/scripts/      # bun/bash/node tooling: watch-pr, orch, runner, check-plan.mjs, worktree-audit.sh
 │   ├── hooks/                        # SessionStart opt-in gate: pstack runs only on request (Claude Code and Codex)
@@ -140,6 +140,8 @@ The table uses the short upstream names. Claude Code exposes each native skill w
 | `/figure-it-out` | design a rigorous, auditable playbook for a task no bundled playbook fits |
 | `/show-me-your-work` | log decisions to a reviewable tsv decision trail |
 | `/blast-radius` | find what a change could break beyond the diff and prove safety by running code |
+| `/intake` | turn GitHub issues into ready-to-run poteto-mode briefs with a playbook, exit condition, and worktree (pstack-flex) |
+| `/diff-behavior` | run the same scenarios on trunk and head and classify every observable difference as intended, unintended, or noise (pstack-flex) |
 | `/recall` | catch up on recent working context from chat history, live state, and the shared record |
 | `/setup-pstack` | configure pstack per-role model choices and per-family requested effort |
 | `/unslop` | clean up writing by removing AI tells |
