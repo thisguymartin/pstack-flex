@@ -9,9 +9,9 @@ Prices and endpoints below were verified 2026-09-25 and drift. Re-verify against
 | Kind | Lanes | Auth | Billing | Route |
 | --- | --- | --- | --- | --- |
 | Subscription | `claude:fable`, `claude:opus`, `codex:gpt-6-astra`, `codex:gpt-6-sol`, `codex:gpt-6-luna`, `codex:gpt-5.6-sol`, `grok:grok-4.7` | each CLI's own login | that CLI's plan | native or external per the route table |
-| Gateway (flex) | DeepSeek Flash / V4 Pro; MiniMax M3 / M3.1 Flash Preview | API key in the environment | provider billing; preview requires Token Plan | always the external runner |
+| Gateway (flex) | DeepSeek Flash / V4 Pro; MiniMax M3 / M3.1 Flash Preview; any OpenRouter model | API key in the environment | provider billing; preview requires Token Plan | always the external runner |
 
-A gateway lane is the stock `claude` binary env-pointed at the lab's Anthropic-compatible endpoint. There is no custom agent loop and no separate harness: the same runner that spawns Codex and Grok lanes spawns gateway lanes with injected environment. Both labs document this Claude Code setup themselves (DeepSeek: `deepseek-ai/awesome-deepseek-agent`, `docs/claude_code.md`; MiniMax: platform.minimax.io, Claude Code guide).
+A gateway lane is the stock `claude` binary env-pointed at the lab's Anthropic-compatible endpoint. There is no custom agent loop and no separate harness: the same runner that spawns Codex and Grok lanes spawns gateway lanes with injected environment. Each provider documents this Claude Code setup itself (DeepSeek: `deepseek-ai/awesome-deepseek-agent`, `docs/claude_code.md`; MiniMax: platform.minimax.io, Claude Code guide; OpenRouter: [Claude Code integration](https://openrouter.ai/docs/guides/guides/claude-code-integration)).
 
 ## GPT-6 Codex families
 
@@ -44,18 +44,39 @@ As of 2026-09-27, [MiniMax's model guide](https://platform.minimax.io/docs/guide
 
 Before recommending a fastest or strongest default, compare the same synthetic coding tasks for correctness, completion time, tool-call reliability, token usage, and actual provider billing. Preview pricing and plan limits must be checked against the active plan rather than inferred from M3 rates.
 
+## OpenRouter: any model, one key
+
+One `OPENROUTER_API_KEY` reaches every model in [OpenRouter's catalog](https://openrouter.ai/models). There is no allowlist. Name any model ID with its namespace, and setup's live probe on that exact model is the gate:
+
+```text
+openrouter:moonshotai/kimi-k3@high
+openrouter:z-ai/glm-5.3@xhigh
+openrouter:google/gemini-3.8-flash@low
+```
+
+`curl -s https://openrouter.ai/api/v1/models` lists the IDs without a key. Each distinct model ID is its own family with its own effort and probe.
+
+- **One refusal.** The runner refuses OpenRouter's own routers (`openrouter/auto`, `openrouter/free`, and the rest of the `openrouter/` namespace). They choose the model server-side, which would hide which model ran. Every model they could choose is reachable by its own ID.
+- **Tools are required.** A lane is a Claude Code agent, so the model must support tool calls. Setup's OpenRouter probe reads its marker from a file, so a model without tool support fails there, not in a real lane.
+- **What OpenRouter guarantees.** OpenRouter guarantees Claude Code only with Anthropic's first-party models. Other models work as far as their probe shows; [gateway-model-probes.md](gateway-model-probes.md) records the route evidence across labs.
+- **Effort.** OpenRouter maps the requested effort onto each model's reasoning controls. A receipt proves the request, not the applied depth.
+- **Model proof.** The reported model must match the requested ID exactly, apart from case. A sibling such as `z-ai/glm-5.3-air` fails a `z-ai/glm-5.3` lane. OpenRouter may fail over between hosts serving the same model; it does not swap the model unless you ask it to through a router or fallback list, which pstack never sends.
+- **Context.** Claude Code does not know a third-party model's context window. When a model's window is small, a long lane can fail as it fills; `OPENROUTER_MAX_CONTEXT_TOKENS` sets the cap for every OpenRouter lane.
+- **Panel diversity counts labs.** An OpenRouter lane counts as its model ID's namespace. `anthropic`, `openai`, `x-ai`, `deepseek`, and `minimax` match the `claude`, `codex`, `grok`, `deepseek`, and `minimax` providers. `openrouter:deepseek/deepseek-v4-pro` plus `deepseek:deepseek-flash` is one provider.
+- **Privacy and spend live on OpenRouter's dashboard.** Turn off data collection or require zero-data-retention hosts, and set a credit limit on the key. OpenRouter forwards each prompt to whichever host serves the model.
+
 ## Gateway environment reference
 
 Set by you:
 
 | Variable | Required | Meaning |
 | --- | --- | --- |
-| `DEEPSEEK_API_KEY` / `MINIMAX_API_KEY` | yes, per lane | the lab's API key; the lane refuses to start without it |
-| `DEEPSEEK_BASE_URL` / `MINIMAX_BASE_URL` | no | endpoint override; defaults are in the flex model matrix |
-| `PSTACK_FLEX_DEEPSEEK_CONFIG_DIR` / `PSTACK_FLEX_MINIMAX_CONFIG_DIR` | no | config-dir override; default `~/.pstack-flex/<provider>` |
-| `DEEPSEEK_MAX_CONTEXT_TOKENS` / `MINIMAX_MAX_CONTEXT_TOKENS` | no | context-cap override for the claude CLI |
+| `DEEPSEEK_API_KEY` / `MINIMAX_API_KEY` / `OPENROUTER_API_KEY` | yes, per lane | the lab's API key; the lane refuses to start without it |
+| `DEEPSEEK_BASE_URL` / `MINIMAX_BASE_URL` / `OPENROUTER_BASE_URL` | no | endpoint override; defaults are in the flex model matrix. OpenRouter's must end in `/api`, not the `/api/v1` other tools use |
+| `PSTACK_FLEX_DEEPSEEK_CONFIG_DIR` / `PSTACK_FLEX_MINIMAX_CONFIG_DIR` / `PSTACK_FLEX_OPENROUTER_CONFIG_DIR` | no | config-dir override; default `~/.pstack-flex/<provider>` |
+| `DEEPSEEK_MAX_CONTEXT_TOKENS` / `MINIMAX_MAX_CONTEXT_TOKENS` / `OPENROUTER_MAX_CONTEXT_TOKENS` | no | context-cap override for the claude CLI |
 
-Injected by the runner at spawn time (never written to disk, never in receipts): `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, the model pins (`ANTHROPIC_MODEL`, the opus/sonnet/haiku alias defaults, `CLAUDE_CODE_SUBAGENT_MODEL`), `CLAUDE_CODE_ATTRIBUTION_HEADER=0`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, and `CLAUDE_CONFIG_DIR`. The runner first removes inherited `ANTHROPIC_*` values and Claude Code cloud-provider flags from the parent session.
+Injected by the runner at spawn time (never written to disk, never in receipts): `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, the model pins (`ANTHROPIC_MODEL`, the opus/sonnet/haiku alias defaults, `CLAUDE_CODE_SUBAGENT_MODEL`), `CLAUDE_CODE_ATTRIBUTION_HEADER=0`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, `CLAUDE_CONFIG_DIR`, and for OpenRouter an empty `ANTHROPIC_API_KEY`, as its guide requires. The runner first removes inherited `ANTHROPIC_*` values and Claude Code cloud-provider flags from the parent session.
 
 ## Storing keys
 
@@ -69,11 +90,13 @@ Recommended: your OS keychain, loaded on demand.
   # once per key — prompts for the value, nothing lands in shell history
   security add-generic-password -a "$USER" -s pstack-deepseek -w
   security add-generic-password -a "$USER" -s pstack-minimax -w
+  security add-generic-password -a "$USER" -s pstack-openrouter -w
 
   # in .zshrc: a function, not an export — keys enter env only when called
   pstack-keys() {
     export DEEPSEEK_API_KEY=$(security find-generic-password -a "$USER" -s pstack-deepseek -w)
     export MINIMAX_API_KEY=$(security find-generic-password -a "$USER" -s pstack-minimax -w)
+    export OPENROUTER_API_KEY=$(security find-generic-password -a "$USER" -s pstack-openrouter -w)
   }
   ```
 
@@ -81,7 +104,7 @@ Recommended: your OS keychain, loaded on demand.
 - **1Password CLI**: `op run --env-file=.env.tpl -- claude` injects the keys at process start with biometric unlock and exports nothing into the shell permanently.
 - **direnv**: fine for per-project scoping (gateway lanes are per-project opt-in anyway), but a raw `.envrc` is plaintext — have it call the keychain instead of holding the key.
 
-Honest threat model: encryption at rest protects against dotfile repos, backups, and file theft. Once a key is in process env, any process running as your user can read it — the same exposure your CLI OAuth credential files already have. Keychain storage plus two ops controls is the right amount: **set spend caps on the DeepSeek and MiniMax dashboards** (the real blast-radius limiter) and rotate keys if a machine is ever compromised.
+Honest threat model: encryption at rest protects against dotfile repos, backups, and file theft. Once a key is in process env, any process running as your user can read it — the same exposure your CLI OAuth credential files already have. Keychain storage plus two ops controls is the right amount: **set spend caps on the DeepSeek, MiniMax, and OpenRouter dashboards** (on OpenRouter, a credit limit on the key) (the real blast-radius limiter) and rotate keys if a machine is ever compromised.
 
 ## Prices (verified 2026-09-25 — re-check before budgeting)
 
@@ -90,6 +113,7 @@ Honest threat model: encryption at rest protects against dotfile repos, backups,
 | DeepSeek V4.1-Flash (`deepseek-flash`) | $0.30 in / $1.20 out peak; $0.15 / $0.60 off-peak; cache hits near-free | Off-peak windows: 01:00-04:00 and 06:00-10:00 UTC on weekdays. The discount is automatic on DeepSeek's side; pstack-flex surfaces the window but never delays your work to hit it. MIT open weights. |
 | DeepSeek V4-Pro | $1.32 / $3.96 peak; half off-peak | Stronger model for hard lanes; assign it per role if wanted. |
 | MiniMax M3 (`MiniMax-M3`) | $0.30 / $1.20 at up to 512K input; higher above | 1M context. Custom community model license (irrelevant for API use). |
+| OpenRouter (any model) | the serving provider's price, passed through with no markup | OpenRouter charges 5.5% when you buy credits by card ([FAQ](https://openrouter.ai/docs/faq), checked 2026-10-05). Each model's page lists its price. |
 | Claude / Codex / Grok subscription lanes | plan-dependent | Billed by each provider's plan, not per token here. |
 
 Gateway receipts always report `costUsd: null`: the claude CLI computes `total_cost_usd` at Anthropic list prices, which would be fiction for third-party traffic. Token usage in receipts is real — multiply it by the table above.
@@ -126,7 +150,6 @@ Quality note: this trades peak capability for cost control. The hardest-task rol
 
 ## Optional lanes
 
-- **OpenRouter (not shipped).** OpenRouter documents a direct Claude Code connection (`ANTHROPIC_BASE_URL=https://openrouter.ai/api`, `ANTHROPIC_AUTH_TOKEN` from `OPENROUTER_API_KEY`, and an explicitly empty `ANTHROPIC_API_KEY`), so no local translator is needed. It guarantees that route only for Anthropic models, so DeepSeek, MiniMax, and other catalog models through OpenRouter must pass the live probes in [issue #7](https://github.com/thisguymartin/pstack-flex/issues/7) (tool call, second turn, effort, model identity) before a lane ships. If it does, model it as another gateway provider in `flex-providers.ts`. Expect a credit fee on top of provider list prices; check OpenRouter's current pricing page.
 - **Local via Ollama (planned).** Ollama serves an Anthropic-compatible API since v0.14, so a `local` gateway provider pointed at it is the natural next lane: full compute control, zero per-token cost, your hardware. Not wired in yet.
 
 ## Adding a gateway provider
@@ -147,3 +170,4 @@ Any lab that serves an Anthropic-compatible `/v1/messages` endpoint can become a
 - V3: run `claude auth status --json` inside a fresh flex config dir with `ANTHROPIC_AUTH_TOKEN` set and record the output here. On macOS, confirm whether `claude login` under an explicit `CLAUDE_CONFIG_DIR` writes `.credentials.json` or the Keychain.
 - V4: the zero-subscription walkthrough above, end to end, on a machine with no stored provider logins.
 - V5: OAuth guard live: `claude login` inside a scratch flex config dir, run a lane, confirm the refusal receipt, then delete that login.
+- V6: OpenRouter route battery ([#7](https://github.com/thisguymartin/pstack-flex/issues/7)) on models from at least four labs, read-only, synthetic workspace. For each: the exact ID answers; a tool call reads a file marker that is not in the prompt; a second turn uses that result; reasoning tokens differ between `low` and `high`; the receipt's reported model matches OpenRouter's activity log. Capture OpenRouter's real errors for a wrong ID, a bad key, no credits, and a model without tools. Record everything in [gateway-model-probes.md](gateway-model-probes.md).

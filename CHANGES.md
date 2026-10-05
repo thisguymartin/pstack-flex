@@ -1,5 +1,12 @@
 # CHANGES — applied substitutions
 
+## Unreleased: OpenRouter gateway, any model
+
+- New gateway provider `openrouter` ([#7](https://github.com/thisguymartin/pstack-flex/issues/7)). One `OPENROUTER_API_KEY` reaches any model in OpenRouter's catalog through the stock `claude` binary, the same path DeepSeek and MiniMax use. There is no allowlist: the flex matrix carries one open `openrouter` row, each distinct model ID is its own family, and setup's live probe on the named model is the gate. The OpenRouter probe reads its marker from a file, so it proves a tool call.
+- The runner refuses an OpenRouter ID without a namespace and OpenRouter's own `openrouter/*` routers, which pick the model server-side. OpenRouter reports must match the requested ID exactly apart from case; the other gateways keep their prefix rule. Only OpenRouter lanes get the empty `ANTHROPIC_API_KEY` its guide requires, so DeepSeek and MiniMax environments are unchanged.
+- Panel diversity counts the lab behind the model. An OpenRouter lane counts as its model ID's namespace, and `anthropic`, `openai`, `x-ai`, `deepseek`, and `minimax` match the direct providers.
+- Design and flow diagrams: [docs/plans/2026-10-05-openrouter-gateway.md](docs/plans/2026-10-05-openrouter-gateway.md).
+
 ## Unreleased: pstack-flex becomes its own distribution
 
 - The marketplace is now `pstack-flex` (was `open-pstack`) in both the Claude Code and Codex marketplace files. Install with `pstack@pstack-flex`. The plugin keeps the name `pstack`, so skill names such as `pstack:poteto-mode` are unchanged. Manifests, package names, and docs point at `thisguymartin/pstack-flex`; attribution to open-pstack, pstack-claude, and Cursor pstack stays in README and NOTICE.
