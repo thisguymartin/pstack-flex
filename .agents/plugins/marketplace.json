@@ -1,7 +1,7 @@
 {
-  "name": "open-pstack",
+  "name": "pstack-flex",
   "interface": {
-    "displayName": "pstack"
+    "displayName": "pstack-flex"
   },
   "plugins": [
     {

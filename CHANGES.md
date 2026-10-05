@@ -8,13 +8,15 @@
 - `architect runners` gets its own first-run default, `codex:gpt-6-astra@high, claude:fable@max`, from a new "Default architect panel" line. The other three panel roles keep the four-lane default.
 - The matrix test and the static invariant check cover the new row, the architect line, and the scope contract.
 
-## Unreleased: agent monitor
+## Unreleased: pstack-flex becomes its own distribution
 
-- Add `/pstack:monitor` and `pstack-monitor`, a read-only local server with a live node canvas of the agents on this machine: Claude Code and Codex sessions, the subagents they spawn, and each agent's model. Any agent opens into a panel that streams its prompts, replies, thinking, and tool calls. The theme follows the session's harness: warm for Claude Code, blue for Codex.
-- The monitor reads the transcripts each harness already writes and adds no hook, so it costs nothing in sessions that never open it. Status comes from process records, lifecycle events, and parent tool results, never file times; what cannot be known shows as unknown. Unrecognized transcript records are counted and surfaced instead of dropped, and `pstack-monitor doctor` reports them without printing content.
-- Messages between agents appear as dashed, arrowed arcs with a count, from Codex's agent messages and Claude Code's `SendMessage` calls. Each new message sends a spark from sender to recipient.
-- External lanes become visible while they run. `pstack-runner` writes an opt-in journal (start record, stdout as it arrives, receipt copy) under `~/.pstack-flex/lanes/` whenever that directory exists; `pstack-monitor start` creates it and `pstack-monitor journal off` deletes it. The new `--label` flag names a lane by its role, such as `arena cross-judge`, and routes nothing. A journal failure never changes a lane's receipt, exit status, or output.
-- The server binds `127.0.0.1`, accepts no writes, rejects foreign `Host` and `Origin` headers, and requires a per-start token. It runs until `pstack-monitor stop`. Tracked in [pstack-flex #23](https://github.com/thisguymartin/pstack-flex/issues/23).
+- The marketplace is now `pstack-flex` (was `open-pstack`) in both the Claude Code and Codex marketplace files. Install with `pstack@pstack-flex`. The plugin keeps the name `pstack`, so skill names such as `pstack:poteto-mode` are unchanged. Manifests, package names, and docs point at `thisguymartin/pstack-flex`; attribution to open-pstack, pstack-claude, and Cursor pstack stays in README and NOTICE.
+- New skills: `intake` ([#10](https://github.com/thisguymartin/pstack-flex/issues/10)) turns GitHub issues into ready-to-run poteto-mode briefs with a playbook, an observable exit condition, a verification plan, and a worktree; it is read-only and parks briefs with open product questions. `diff-behavior` ([#15](https://github.com/thisguymartin/pstack-flex/issues/15)) runs the same scenarios on trunk and head through `swarm`, normalizes, and classifies every difference as intended, unintended, or noise. Neither changes an upstream skill body; wiring them into poteto-mode and the multi-phase-plan regression lane is a follow-up.
+- Fixes: `codex-tools.md` now says the default panel runs four lanes across three providers (it said four providers). `docs/LANES.md` replaces the stale claim that OpenRouter needs a local translator with OpenRouter's documented Claude Code connection and the probes from [#7](https://github.com/thisguymartin/pstack-flex/issues/7).
+
+## Unreleased: lane journal
+
+- `pstack-runner` writes an opt-in lane journal (start record with the head of the prompt, stdout as it arrives, receipt copy) under `~/.pstack-flex/lanes/` while that directory exists. `--label` names a lane. A journal failure never changes a lane's receipt, exit status, or output. [psf-monitor](https://github.com/thisguymartin/psf-monitor) reads the journal to show lanes while they run; the agent monitor that first shipped here moved there. Tracked in [pstack-flex #23](https://github.com/thisguymartin/pstack-flex/issues/23).
 
 ## Unreleased: merge open-pstack 1.5.0 (Cursor pstack 0.15.5)
 

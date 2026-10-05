@@ -1,10 +1,10 @@
 # pstack-flex
 
 [![CI](https://github.com/thisguymartin/pstack-flex/actions/workflows/ci.yml/badge.svg)](https://github.com/thisguymartin/pstack-flex/actions/workflows/ci.yml)
-[![Fork of open-pstack v1.5.0](https://img.shields.io/badge/fork%20of-open--pstack%20v1.5.0-blue)](https://github.com/ericlitman/open-pstack/releases/tag/v1.5.0)
+[![Based on open-pstack v1.5.0](https://img.shields.io/badge/based%20on-open--pstack%20v1.5.0-blue)](https://github.com/ericlitman/open-pstack/releases/tag/v1.5.0)
 [![MIT license](https://img.shields.io/github/license/thisguymartin/pstack-flex)](LICENSE)
 
-**pstack-flex runs [Lauren Tan (@poteto)](https://x.com/poteto)'s [pstack](https://github.com/cursor/plugins/tree/main/pstack) in Claude Code and Codex on the models you actually have.** It is a fork of [ericlitman/open-pstack](https://github.com/ericlitman/open-pstack), which translates pstack's Cursor-specific parts for Claude Code and Codex. open-pstack assumes four frontier subscriptions. This fork keeps its skills and workflows and changes one thing: which models setup accepts and how they are reached.
+**pstack-flex runs [Lauren Tan (@poteto)](https://x.com/poteto)'s [pstack](https://github.com/cursor/plugins/tree/main/pstack) in Claude Code and Codex on the models you actually have.** It is built on [ericlitman/open-pstack](https://github.com/ericlitman/open-pstack), which translates pstack's Cursor-specific parts for Claude Code and Codex. open-pstack assumes four frontier subscriptions. pstack-flex keeps its skills and workflows, changes which models setup accepts and how they are reached, and adds its own skills. The agent monitor lives in its own repository, [psf-monitor](https://github.com/thisguymartin/psf-monitor).
 
 Lauren built pstack from the skills she uses to ship code at Cursor. In a [55-minute interview with Denis Labelle](https://x.com/DenisLabelle/status/2091337807939706928), she says that she shipped 1,000 pull requests in one month after steadily improving how her agents work and verify their results.
 
@@ -81,7 +81,7 @@ Run these commands inside Claude Code:
 
 ```text
 /plugin marketplace add thisguymartin/pstack-flex
-/plugin install pstack@open-pstack
+/plugin install pstack@pstack-flex
 /reload-plugins
 ```
 
@@ -91,7 +91,7 @@ Run these commands in your shell:
 
 ```shell
 codex plugin marketplace add thisguymartin/pstack-flex --ref main
-codex plugin add pstack@open-pstack
+codex plugin add pstack@pstack-flex
 ```
 
 Turn on Codex subagents in `~/.codex/config.toml` so pstack can compare work in parallel:
@@ -143,17 +143,11 @@ Use pstack:poteto-mode. Add saved filters to search. Keep the design simple, ver
 
 For that feature, poteto-mode should first understand how search works today. It should decide how the data should be represented before writing code, implement the smallest complete version, run the feature the way a user would, review the result, and prepare the pull request.
 
-That is the main workflow. The other skills are there when poteto-mode needs them or when you want to call one directly. **[docs/USAGE.md](docs/USAGE.md)** is the longer walkthrough: three setup configurations (full frontier, hybrid saver, zero-subscription), copy-paste examples for the daily skills, how to read receipts, watching your agents, and troubleshooting.
+That is the main workflow. The other skills are there when poteto-mode needs them or when you want to call one directly. **[docs/USAGE.md](docs/USAGE.md)** is the longer walkthrough: three setup configurations (full frontier, hybrid saver, zero-subscription), copy-paste examples for the daily skills, how to read receipts, and troubleshooting.
 
 ### 3. Watch your agents (optional)
 
-The monitor does not start by itself. Start it when you want to watch a run:
-
-```text
-/pstack:monitor
-```
-
-In Codex, ask for `pstack:monitor`. It prints a link to a local page that draws every session, the agents it spawned, the external lanes pstack launched, and the messages between them, live. It keeps running in the background until you say "pstack, kill the monitor" or restart the machine. See [Watching your agents](docs/USAGE.md#watching-your-agents-the-monitor) for the terminal commands and troubleshooting.
+The agent monitor is a separate plugin, [psf-monitor](https://github.com/thisguymartin/psf-monitor). Install it next to pstack to watch each pstack session, the agents it spawned, and the external lanes pstack launched, live, and to cancel a running lane from the page.
 
 ## Useful skills
 
@@ -168,7 +162,8 @@ In Codex, ask for `pstack:monitor`. It prints a link to a local page that draws 
 | `maintain-verification-skill` | The project's verification instructions no longer match the product. |
 | `babysit` | A pull request needs CI failures and review comments handled until it is ready. |
 | `reflect` | A hard task is finished and its lessons should improve the next run. |
-| `monitor` | You want to watch your agents work: a live graph of every session, subagent, and model lane, with each agent's activity a click away. |
+| `intake` | You have GitHub issues and want each turned into a ready-to-run brief with a playbook, an observable exit condition, and a worktree. |
+| `diff-behavior` | You want to know what a change did from the outside: the same scenarios on trunk and head, with every unclaimed difference flagged. |
 
 Plugin skills include `pstack:` in their name. In Claude Code, invoke a native skill such as `/pstack:architect`. In Codex, ask for the skill, such as `Use pstack:architect for this design.` See the [technical reference](docs/reference.md) for the full list.
 
@@ -202,8 +197,8 @@ Also kept here: [the original README](README-UPSTREAM.md), unchanged; [the techn
 
 Fixes for Claude Code or Codex, new lanes, and help bringing over new pstack releases are welcome. Search this repository's [GitHub Issues](https://github.com/thisguymartin/pstack-flex/issues) before opening a new one. For changes to upstream-derived content, explain why the change belongs here instead of in open-pstack or Lauren's original project.
 
-Read [UPSTREAM.md](UPSTREAM.md) and [UPSTREAM-FLEX.md](UPSTREAM-FLEX.md) before changing content brought over from either upstream. Pull requests must keep one shared skill tree for Claude Code and Codex and pass the repository's tests, type checks, plugin validation, and static checks. Nothing merges until the exact candidate is installed and the changed behavior passes a live test from the real user surface in every affected harness; the [pull request template](.github/pull_request_template.md) records that evidence, and a PR without it stays a draft. Adding a gateway provider has its own checklist in [docs/LANES.md](docs/LANES.md#adding-a-gateway-provider).
+Read [UPSTREAM.md](UPSTREAM.md) and [UPSTREAM-FLEX.md](UPSTREAM-FLEX.md) before changing content brought over from either upstream. Pull requests must keep one shared skill tree for Claude Code and Codex and pass the repository's tests, type checks, plugin validation, and static checks. Nothing merges until the exact candidate is installed and the changed behavior passes a live test from the real user surface in every affected harness; the [pull request template](.github/pull_request_template.md) records that evidence, and a PR without it stays a draft. Run `bash scripts/check.sh` for the local checks and follow [docs/LIVE-GATE.md](docs/LIVE-GATE.md) for the live test. Adding a gateway provider has its own checklist in [docs/LANES.md](docs/LANES.md#adding-a-gateway-provider).
 
 ## License
 
-MIT. pstack was created by Lauren Tan. open-pstack builds on Michael Denyer's [pstack-claude](https://github.com/michael-denyer/pstack-claude) port and includes attributed MIT-licensed work from Cursor Team Kit and Superpowers. pstack-flex is a fork of open-pstack. See [NOTICE.md](NOTICE.md) and the preserved license files for details.
+MIT. pstack was created by Lauren Tan. open-pstack builds on Michael Denyer's [pstack-claude](https://github.com/michael-denyer/pstack-claude) port and includes attributed MIT-licensed work from Cursor Team Kit and Superpowers. pstack-flex started as a fork of open-pstack and is maintained as its own distribution. See [NOTICE.md](NOTICE.md) and the preserved license files for details.
