@@ -67,6 +67,7 @@ const SETUP_SECTION_ORDER = [
   "### 7. Confirm and commit",
 ] as const;
 
+const OPEN_OPENROUTER_MODEL = "<any OpenRouter model ID>";
 const FLEX_MATRIX_HEADER = [
   "Family",
   "Provider",
@@ -512,7 +513,13 @@ describe("model matrix", () => {
       const pair = `${provider}:${model}`;
       expect(pairs.has(pair)).toBe(false);
       pairs.add(pair);
-      expect(/^[A-Za-z0-9.-]+$/.test(model)).toBe(true);
+      // OpenRouter's row is open: its Model cell is a placeholder for any
+      // catalog ID, which setup probes one model at a time.
+      if (gateway === "openrouter") {
+        expect(model).toBe(OPEN_OPENROUTER_MODEL);
+      } else {
+        expect(/^[A-Za-z0-9.-]+$/.test(model)).toBe(true);
+      }
       const selectable = selectableRaw.split(/\s+/).map(asEffort);
       expect(selectable).toContain(asEffort(defaultEffortRaw));
       expect(keyVar).toBe(GATEWAY_SPECS[gateway].apiKeyVar);
@@ -525,13 +532,18 @@ describe("model matrix", () => {
       "deepseek:deepseek-v4-pro",
       "minimax:MiniMax-M3",
       "minimax:MiniMax-M3.1-Flash-Preview",
+      `openrouter:${OPEN_OPENROUTER_MODEL}`,
     ]) expect(pairs.has(pair)).toBe(true);
+    expect(dispatch).toContain("The `openrouter` row is open.");
+    expect(dispatch).toContain("There is no allowlist; setup's live probe on the chosen model is the gate.");
+    expect(dispatch).toContain("Each distinct OpenRouter model ID is its own family");
+    expect(dispatch).toContain("a lane's provider is the lab that made the model, not the route that reaches it.");
     expect(setup).toContain("Never group efforts or deduplicate probes by provider alone.");
     expect(setup).toContain("Different models sharing a provider count as one provider");
     // The stock quad and first-run sheet must not carry flex descriptors:
     // upstream's own checks parse descriptors with a lowercase-only,
     // three-provider grammar and must never see a flex lane.
-    expect(firstRunSheet(setup)).not.toMatch(/deepseek:|minimax:/i);
+    expect(firstRunSheet(setup)).not.toMatch(/deepseek:|minimax:|openrouter:/i);
   });
 
   it("binds Claude-native dispatch to the matrix mapping", () => {

@@ -1,6 +1,6 @@
 ---
 name: setup-pstack
-description: Configure pstack's provider-qualified models, per-family requested effort, and parent-owned routes per role. Verifies native and external Claude, Codex, Grok, DeepSeek, and MiniMax lanes before writing the override sheet. Use for /setup-pstack, "configure pstack models", or changing pstack's model choices.
+description: Configure pstack's provider-qualified models, per-family requested effort, and parent-owned routes per role. Verifies native and external Claude, Codex, Grok, DeepSeek, MiniMax, and OpenRouter lanes before writing the override sheet. Use for /setup-pstack, "configure pstack models", or changing pstack's model choices.
 ---
 
 # Setup pstack
@@ -33,17 +33,17 @@ Read the current parent-specific sheet when it exists. Before matrix validation,
 
 Treat the normalized values as current role-to-family assignments. Overlay those rows on the complete first-run role map in step 7. Materialize any missing documented role row from that map on the next successful write. A duplicate role row is inconsistent state; report it and resolve it before probing. A row whose role is not in the step 7 role map, such as `how critics`, is from a retired role. Drop it and list it at confirmation. A bare host-native slug from an older sheet is also invalid because it does not say which provider owns it. A versioned Claude model outside the two migration families remains inconsistent state. If the sheet is missing, use the complete first-run role map and the model matrix's Default effort cells.
 
-Then ask whether to keep these role-to-family assignments or change named roles. Keeping them is the default. Apply only role changes the operator names; never offer a reset of a customized sheet to the first-run assignments. A changed role may use any stock or flex matrix family, `inherit-parent`, or `auto`.
+Then ask whether to keep these role-to-family assignments or change named roles. Keeping them is the default. Apply only role changes the operator names; never offer a reset of a customized sheet to the first-run assignments. A changed role may use any stock or flex matrix family, any OpenRouter model ID the operator names (`openrouter:<namespace>/<model>`), `inherit-parent`, or `auto`.
 
 Offer every stock family, including Astra, GPT-6 Sol, and Luna, when changing `architect runners` or another configurable role. Read each model, proposed effort, and selectable efforts from its row. The Codex families are separate families even though they share the Codex provider; changing one family's effort does not change another's. GPT-6 Sol uses the `sol-6` family; the `sol` family keeps GPT-5.6 Sol for sheets that still assign it.
 
 ### 3. Parse per-family efforts
 
-Read the model matrices, stock and flex. Every non-alias value must match `<provider>:<model>@<effort>`. Map it to exactly one matrix family by `(provider, model)`, require its effort to appear in that row's Selectable efforts cell, and collect the effort. `inherit-parent` and `auto` rows carry no family effort.
+Read the model matrices, stock and flex. Every non-alias value must match `<provider>:<model>@<effort>`. Map it to exactly one matrix family by `(provider, model)`; an `openrouter` descriptor maps to the open `openrouter` row whatever its model ID. Require its effort to appear in that row's Selectable efforts cell, and collect the effort. `inherit-parent` and `auto` rows carry no family effort.
 
 An unmatched provider/model, out-of-domain effort, or duplicate role is inconsistent state. Stop, show the conflicting rows verbatim, and ask for an explicit matrix family or alias replacement. If one or more families have mixed efforts, show every conflicting family and role row, then ask for one normalized effort per family from its Selectable efforts cell. Do not invent a precedence rule. Do not probe or write while any inconsistency is unresolved.
 
-A family is a single `(provider, model)` matrix row. DeepSeek Flash and Pro have independent efforts, as do MiniMax M3 and M3.1 Flash Preview. Never group efforts or deduplicate probes by provider alone.
+A family is a single `(provider, model)` matrix row. DeepSeek Flash and Pro have independent efforts, as do MiniMax M3 and M3.1 Flash Preview. Each distinct OpenRouter model ID is its own family under the open row, with its own effort and probe. Never group efforts or deduplicate probes by provider alone.
 
 One distinct effort per family is the current value. A family with no non-alias occurrence is unassigned: do not ask for its effort, check its CLI, or probe it. A family that a step 2 role change newly assigns takes its matrix Default effort as the proposed value.
 
@@ -66,10 +66,13 @@ Probe only the selected `provider:model@effort` pair of each assigned family. Ru
 | Opus | Opus matrix row + selected effort | native Agent `pstack-opus-<effort>` | Claude CLI | native one-turn probe or `claude auth status --json` plus one-turn probe |
 | DeepSeek Flash / Pro | Each assigned DeepSeek flex row + selected effort | external runner | external runner | `DEEPSEEK_API_KEY` present; isolated config dir free of OAuth credentials; one-turn probe confirms the endpoint |
 | MiniMax M3 / M3.1 Flash Preview | Each assigned MiniMax flex row + selected effort | external runner | external runner | `MINIMAX_API_KEY` present; isolated config dir free of OAuth credentials; one-turn probe confirms the endpoint |
+| OpenRouter (any model ID) | Each assigned OpenRouter model ID + selected effort | external runner | external runner | `OPENROUTER_API_KEY` present; isolated config dir free of OAuth credentials; one-turn probe that reads its marker from a file |
 
 For MiniMax M3.1 Flash Preview, disclose the Token Plan requirement before probing. Use the eligible subscription key through `MINIMAX_API_KEY`; do not assume a working M3 key grants preview access. A failed preview probe must not silently select M3. Keep preview thinking enabled and verify requested effort forwarding; distinguish request evidence from hidden applied reasoning depth.
 
-Use a tiny read-only probe that returns a unique marker. A login-status command alone proves credentials, not that the requested model and effort flags run. Record native and external results separately. Never call the external launcher for the parent's own provider. On a Claude parent, the Fable and Opus probes are one-turn runs of the mapped `pstack-<stem>-<effort>` agent. On a Codex parent, each assigned Codex family gets a native `spawn_agent` probe with its matrix model and selected `reasoning_effort`. Every other pair, flex families always included, uses the external runner with the selected effort flag. A flex probe doubles as the base-URL confirmation: it proves the documented default (or the operator's override) actually serves the lane's model.
+Before the first OpenRouter probe, tell the operator three things: OpenRouter forwards prompts to whichever host serves the model, data-collection and zero-data-retention routing plus the key's credit limit are set on OpenRouter's dashboard, and each probe spends a little credit. Probe exactly the model ID the operator named. A failed OpenRouter probe does not offer another catalog model; report OpenRouter's error and ask for a replacement ID or a role reassignment.
+
+Use a tiny read-only probe that returns a unique marker. For an OpenRouter model, write the marker to a file in a scratch directory and leave it out of the prompt, so a passing probe proves the model made a tool call; Claude Code lanes cannot work without one. A login-status command alone proves credentials, not that the requested model and effort flags run. Record native and external results separately. Never call the external launcher for the parent's own provider. On a Claude parent, the Fable and Opus probes are one-turn runs of the mapped `pstack-<stem>-<effort>` agent. On a Codex parent, each assigned Codex family gets a native `spawn_agent` probe with its matrix model and selected `reasoning_effort`. Every other pair, flex families always included, uses the external runner with the selected effort flag. A flex probe doubles as the base-URL confirmation: it proves the documented default (or the operator's override) actually serves the lane's model.
 
 Receipts and native transcripts prove the requested effort and the route. They do not prove a provider's hidden applied reasoning depth. There is no implicit timeout, weaker-model fallback, same-provider external fallback, or second mutable configuration source.
 
@@ -82,11 +85,11 @@ Build the new sheet in memory. Do not write it yet.
 
 Require every documented role to remain present and non-empty, `architect runners` to keep at least two entries, and the final role map to contain at least one assigned matrix family. There is no requirement to assign every matrix family.
 
-Different models sharing a provider count as one provider, even when their efforts differ.
+Different models sharing a provider count as one provider, even when their efforts differ. An OpenRouter lane counts as its model ID's lab, as `provider-dispatch.md` defines: the namespaces `anthropic`, `openai`, `x-ai`, `deepseek`, and `minimax` match the direct providers, and any other namespace is a provider of its own.
 
 Validate panel diversity: `arena runners` and `interrogate reviewers` must span at least two distinct providers. A single-provider panel is written only after the operator explicitly confirms the reduced diversity; record that confirmation in the setup report.
 
-Rewrite every matrix-family descriptor to `provider:model@<requested effort for that family>`. Leave `inherit-parent` and `auto` unchanged. An effort-only rerun cannot change a role's family. Changing Grok's effort updates every Grok occurrence and does not move a Sol role onto Grok. Refuse an unqualified slug, an unavailable route, a model outside the stock and flex matrix families, or a provider/model mismatch.
+Rewrite every matrix-family descriptor to `provider:model@<requested effort for that family>`. Leave `inherit-parent` and `auto` unchanged. An effort-only rerun cannot change a role's family. Changing Grok's effort updates every Grok occurrence and does not move a Sol role onto Grok. Refuse an unqualified slug, an unavailable route, a model outside the stock and flex matrix families, an OpenRouter ID without a namespace or from the `openrouter/*` routers, or a provider/model mismatch.
 
 ### 7. Confirm and commit
 

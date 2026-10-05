@@ -142,6 +142,16 @@ describe("parseProviderOutput", () => {
     expect(reportedModelMatches("claude", "MiniMax-M3", "minimax-m3")).toBe(false);
   });
 
+  it("matches OpenRouter models exactly, ignoring only case", () => {
+    expect(reportedModelMatches("openrouter", "z-ai/glm-5.3", "z-ai/glm-5.3")).toBe(true);
+    expect(reportedModelMatches("openrouter", "z-ai/glm-5.3", "Z-AI/GLM-5.3")).toBe(true);
+    expect(reportedModelMatches("openrouter", "z-ai/glm-5.3", "z-ai/glm-5.3-air")).toBe(false);
+    expect(
+      reportedModelMatches("openrouter", "google/gemini-3.8-flash", "google/gemini-3.8-flash-lite")
+    ).toBe(false);
+    expect(reportedModelMatches("openrouter", "z-ai/glm-5.3", "glm-5.3")).toBe(false);
+  });
+
   it("matches only concrete Claude revisions from the requested rolling family", () => {
     expect(reportedModelMatches("claude", "fable", "claude-fable-9-9")).toBe(true);
     expect(reportedModelMatches("claude", "opus", "claude-opus-9")).toBe(true);

@@ -15,6 +15,9 @@ export interface GatewaySpec {
   readonly configDirOverrideVar: string;
   readonly maxContextTokensDefault: string | null;
   readonly maxContextTokensOverrideVar: string;
+  // OpenRouter's Claude Code guide requires ANTHROPIC_API_KEY to be set and
+  // empty, not merely unset.
+  readonly emptyApiKey: boolean;
 }
 
 export const GATEWAY_SPECS: Record<GatewayProvider, GatewaySpec> = {
@@ -25,6 +28,7 @@ export const GATEWAY_SPECS: Record<GatewayProvider, GatewaySpec> = {
     configDirOverrideVar: "PSTACK_FLEX_DEEPSEEK_CONFIG_DIR",
     maxContextTokensDefault: "128000",
     maxContextTokensOverrideVar: "DEEPSEEK_MAX_CONTEXT_TOKENS",
+    emptyApiKey: false,
   },
   minimax: {
     apiKeyVar: "MINIMAX_API_KEY",
@@ -33,8 +37,32 @@ export const GATEWAY_SPECS: Record<GatewayProvider, GatewaySpec> = {
     configDirOverrideVar: "PSTACK_FLEX_MINIMAX_CONFIG_DIR",
     maxContextTokensDefault: null,
     maxContextTokensOverrideVar: "MINIMAX_MAX_CONTEXT_TOKENS",
+    emptyApiKey: false,
+  },
+  openrouter: {
+    apiKeyVar: "OPENROUTER_API_KEY",
+    baseUrlDefault: "https://openrouter.ai/api",
+    baseUrlOverrideVar: "OPENROUTER_BASE_URL",
+    configDirOverrideVar: "PSTACK_FLEX_OPENROUTER_CONFIG_DIR",
+    maxContextTokensDefault: null,
+    maxContextTokensOverrideVar: "OPENROUTER_MAX_CONTEXT_TOKENS",
+    emptyApiKey: true,
   },
 };
+
+// OpenRouter serves any catalog model by its namespaced ID, such as
+// `z-ai/glm-5.3`. Its own `openrouter/*` IDs (auto, free) pick the model
+// server-side, which would hide which model ran.
+export function openRouterModelRefusal(model: string): string | null {
+  const slash = model.indexOf("/");
+  if (slash <= 0 || slash === model.length - 1) {
+    return `OpenRouter model ${model} must be a namespaced ID such as z-ai/glm-5.3`;
+  }
+  if (model.slice(0, slash).toLowerCase() === "openrouter") {
+    return `OpenRouter router ${model} picks the model server-side; name the model directly`;
+  }
+  return null;
+}
 
 // Provider selection and Claude configuration from the parent must not
 // override the gateway's endpoint, token, or isolated config directory.
@@ -84,6 +112,7 @@ export function gatewayEnvironment(
   };
   const token = overridden(source, spec.apiKeyVar);
   if (token !== null) injected.ANTHROPIC_AUTH_TOKEN = token;
+  if (spec.emptyApiKey) injected.ANTHROPIC_API_KEY = "";
   const maxContext =
     overridden(source, spec.maxContextTokensOverrideVar) ?? spec.maxContextTokensDefault;
   if (maxContext !== null) injected.CLAUDE_CODE_MAX_CONTEXT_TOKENS = maxContext;

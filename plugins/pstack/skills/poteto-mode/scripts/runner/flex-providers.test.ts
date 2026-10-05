@@ -8,6 +8,7 @@ import {
   gatewayConfigDir,
   gatewayEnvironment,
   gatewayGuard,
+  openRouterModelRefusal,
 } from "./flex-providers.ts";
 import { GATEWAY_PROVIDERS } from "./types.ts";
 
@@ -39,6 +40,9 @@ describe("gatewayConfigDir", () => {
     expect(gatewayConfigDir("minimax", {})).toBe(
       join(homedir(), ".pstack-flex", "minimax")
     );
+    expect(gatewayConfigDir("openrouter", {})).toBe(
+      join(homedir(), ".pstack-flex", "openrouter")
+    );
   });
 
   it("honors the override variable and ignores blank overrides", () => {
@@ -68,6 +72,26 @@ describe("gatewayEnvironment", () => {
       CLAUDE_CODE_ATTRIBUTION_HEADER: "0",
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
       CLAUDE_CODE_MAX_CONTEXT_TOKENS: "128000",
+      CLAUDE_CONFIG_DIR: scratch,
+    });
+  });
+
+  it("injects OpenRouter's endpoint with an explicitly empty API key", () => {
+    const source = {
+      OPENROUTER_API_KEY: "sk-or-test",
+      PSTACK_FLEX_OPENROUTER_CONFIG_DIR: scratch,
+    };
+    expect(gatewayEnvironment("openrouter", "z-ai/glm-5.3", source)).toEqual({
+      ANTHROPIC_BASE_URL: "https://openrouter.ai/api",
+      ANTHROPIC_AUTH_TOKEN: "sk-or-test",
+      ANTHROPIC_API_KEY: "",
+      ANTHROPIC_MODEL: "z-ai/glm-5.3",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "z-ai/glm-5.3",
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "z-ai/glm-5.3",
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "z-ai/glm-5.3",
+      CLAUDE_CODE_SUBAGENT_MODEL: "z-ai/glm-5.3",
+      CLAUDE_CODE_ATTRIBUTION_HEADER: "0",
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
       CLAUDE_CONFIG_DIR: scratch,
     });
   });
@@ -116,6 +140,31 @@ describe("gatewayEnvironment", () => {
       "CLAUDE_CONFIG_DIR",
     ]) {
       expect(conflicts.has(key)).toBe(true);
+    }
+  });
+});
+
+describe("openRouterModelRefusal", () => {
+  it("accepts any namespaced catalog ID", () => {
+    for (const model of [
+      "z-ai/glm-5.3",
+      "moonshotai/kimi-k3",
+      "anthropic/claude-sonnet-5.5",
+      "qwen/qwen3.8-max-0902",
+      "~google/gemini-flash-latest",
+      "z-ai/glm-5.3:free",
+    ]) expect(openRouterModelRefusal(model)).toBeNull();
+  });
+
+  it("refuses a bare slug", () => {
+    for (const model of ["glm-5.3", "/glm-5.3", "z-ai/"]) {
+      expect(openRouterModelRefusal(model)).toContain("must be a namespaced ID");
+    }
+  });
+
+  it("refuses OpenRouter's own routers, which pick the model server-side", () => {
+    for (const model of ["openrouter/auto", "openrouter/free", "OpenRouter/auto-beta"]) {
+      expect(openRouterModelRefusal(model)).toContain("picks the model server-side");
     }
   });
 });

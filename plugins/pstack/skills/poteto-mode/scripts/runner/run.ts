@@ -15,6 +15,7 @@ import {
   GATEWAY_INHERITED_CONFLICTS,
   gatewayEnvironment,
   gatewayGuard,
+  openRouterModelRefusal,
 } from "./flex-providers.ts";
 import { versionedClaudeAlias } from "./model-aliases.ts";
 import { parseProviderOutput, reportedModelMatches } from "./parse-output.ts";
@@ -537,6 +538,10 @@ export function validateOptions(options: RunnerOptions): void {
       `Claude model ${options.model} is a version pin; normalize it to ${staleAlias} before invoking the runner`
     );
   }
+  const routerRefusal = options.provider === "openrouter"
+    ? openRouterModelRefusal(options.model)
+    : null;
+  if (routerRefusal !== null) throw new UsageError(routerRefusal);
   if (
     options.timeoutMs !== null &&
     (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0)

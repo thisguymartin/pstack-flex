@@ -194,6 +194,11 @@ export function reportedModelMatches(
   if (provider === "claude" && isRollingClaudeAlias(requested)) {
     return concreteModelMatchesRollingAlias(requested, reported);
   }
+  if (provider === "openrouter") {
+    // Any catalog model can be requested, so a prefix match would accept a
+    // sibling such as z-ai/glm-5.3-air for z-ai/glm-5.3.
+    return reported.toLowerCase() === requested.toLowerCase();
+  }
   if (isGatewayProvider(provider)) {
     // Third-party endpoints are inconsistent about slug casing
     // (e.g. MiniMax-M3 vs minimax-m3); compare case-insensitively.

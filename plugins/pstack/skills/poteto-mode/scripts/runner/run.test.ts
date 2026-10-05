@@ -1008,8 +1008,10 @@ describe("gateway lanes", () => {
   const GATEWAY_TEST_KEYS = [
     "DEEPSEEK_API_KEY",
     "MINIMAX_API_KEY",
+    "OPENROUTER_API_KEY",
     "PSTACK_FLEX_DEEPSEEK_CONFIG_DIR",
     "PSTACK_FLEX_MINIMAX_CONFIG_DIR",
+    "PSTACK_FLEX_OPENROUTER_CONFIG_DIR",
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_CUSTOM_HEADERS",
     "CLAUDE_CODE_USE_BEDROCK",
@@ -1019,15 +1021,21 @@ describe("gateway lanes", () => {
     "FAKE_OMIT_MODEL_USAGE",
   ] as const;
 
+  const GATEWAY_MODELS = {
+    deepseek: "deepseek-flash",
+    minimax: "MiniMax-M3",
+    openrouter: "z-ai/glm-5.3",
+  } as const;
+
   function gatewayOptions(
-    provider: "deepseek" | "minimax",
+    provider: keyof typeof GATEWAY_MODELS,
     suffix: string
   ): RunnerOptions {
     return {
       ...options(provider === "deepseek" ? "claude" : "codex", suffix),
       provider,
       parent: "claude",
-      model: provider === "deepseek" ? "deepseek-flash" : "MiniMax-M3",
+      model: GATEWAY_MODELS[provider],
       effort: "high",
     };
   }
@@ -1038,6 +1046,8 @@ describe("gateway lanes", () => {
     process.env.MINIMAX_API_KEY = "sk-minimax-test";
     process.env.PSTACK_FLEX_DEEPSEEK_CONFIG_DIR = join(scratch, "flex-deepseek");
     process.env.PSTACK_FLEX_MINIMAX_CONFIG_DIR = join(scratch, "flex-minimax");
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    process.env.PSTACK_FLEX_OPENROUTER_CONFIG_DIR = join(scratch, "flex-openrouter");
   });
 
   afterEach(() => {
@@ -1193,6 +1203,64 @@ describe("gateway lanes", () => {
     expect(written.reportedModel).toBeNull();
     expect(written.modelVerified).toBe(false);
     expect(written.modelEvidence).toBe("pinned-argv");
+  });
+
+  it("injects OpenRouter's endpoint and replaces the parent's API key with an empty one", async () => {
+    process.env.ANTHROPIC_API_KEY = "parent-anthropic-secret";
+    const dumpPath = join(scratch, "openrouter-env.json");
+    process.env.FAKE_DUMP_ENV_PATH = dumpPath;
+    const input = gatewayOptions("openrouter", "openrouter-env");
+    expect((await runLane(input)).exitCode).toBe(0);
+    const child = JSON.parse(readFileSync(dumpPath, "utf8")) as Record<string, string>;
+    expect(child.ANTHROPIC_BASE_URL).toBe("https://openrouter.ai/api");
+    expect(child.ANTHROPIC_AUTH_TOKEN).toBe("sk-or-test");
+    expect(child.ANTHROPIC_API_KEY).toBe("");
+    expect(child.ANTHROPIC_MODEL).toBe("z-ai/glm-5.3");
+    expect(child.CLAUDE_CONFIG_DIR).toBe(join(scratch, "flex-openrouter"));
+    expect(JSON.stringify(child)).not.toContain("parent-anthropic-secret");
+  });
+
+  for (const parent of ["claude", "codex"] as const) {
+    it(`pins a namespaced OpenRouter model through the ${parent} parent route`, async () => {
+      const model = "moonshotai/kimi-k3";
+      const input: RunnerOptions = {
+        ...gatewayOptions("openrouter", "openrouter-pin"), parent, model, effort: "low",
+      };
+      expect((await runLane(input)).exitCode).toBe(0);
+      const written = receipt(input.receiptPath);
+      expect(written).toMatchObject({
+        status: "complete", parent, provider: "openrouter", model, effort: "low",
+        reportedModel: model, modelVerified: true, modelEvidence: "provider-report",
+        costUsd: null,
+      });
+      expect(written.argv[written.argv.indexOf("--model") + 1]).toBe(model);
+    });
+  }
+
+  it("fails an OpenRouter lane that reports a sibling of the requested model", async () => {
+    process.env.FAKE_REPORT_MODEL = "z-ai/glm-5.3-air";
+    const input = gatewayOptions("openrouter", "openrouter-sibling");
+    expect((await runLane(input)).exitCode).toBe(65);
+    const written = receipt(input.receiptPath);
+    expect(written.status).toBe("malformed-output");
+    expect(written.modelVerified).toBe(false);
+    expect(existsSync(input.outputPath)).toBe(false);
+  });
+
+  it("refuses OpenRouter's auto router before reserving any output", async () => {
+    const input = { ...gatewayOptions("openrouter", "openrouter-auto"), model: "openrouter/auto" };
+    await expect(runLane(input)).rejects.toThrow("picks the model server-side");
+    expect(existsSync(input.outputPath)).toBe(false);
+    expect(existsSync(input.receiptPath)).toBe(false);
+  });
+
+  it("refuses an OpenRouter lane without its key and names the variable", async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    const input = gatewayOptions("openrouter", "openrouter-missing-key");
+    expect((await runLane(input)).exitCode).toBe(77);
+    const written = receipt(input.receiptPath);
+    expect(written.status).toBe("unauthenticated");
+    expect(written.error?.message).toBe("OPENROUTER_API_KEY is not set");
   });
 
   it("classifies an endpoint authentication error as unauthenticated", async () => {
