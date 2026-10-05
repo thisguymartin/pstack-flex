@@ -1,5 +1,13 @@
 # CHANGES — applied substitutions
 
+## Unreleased: project model sheets and GPT-6.1 Sol
+
+- `setup-pstack` asks on every run whether to configure the global sheet or a project sheet. A project sheet lives at `<project root>/.claude/pstack-models.md` (Claude Code) or `<project root>/.codex/pstack-models.md` (Codex), starts from the global assignments, and is listed in `.git/info/exclude` so it never reaches a commit. It needs no CLAUDE.md include and no AGENTS.md block.
+- `provider-dispatch.md` gains a "Sheet scope" section: the parent reads the project path once before dispatch, an existing project sheet replaces the global sheet whole, and a project without one uses the global sheet. The two are never merged per role.
+- Add the `sol-6.1` stock family, `codex:gpt-6.1-sol@high`, which Codex CLI 0.160.0 lists as its latest coding model. It takes the first-run `feature, refactoring`, `bug-fix`, `perf-issue`, and `hillclimb` roles. `sol-6` stays selectable; existing sheets keep their rows until setup reassigns them.
+- `architect runners` gets its own first-run default, `codex:gpt-6-astra@high, claude:fable@max`, from a new "Default architect panel" line. The other three panel roles keep the four-lane default.
+- The matrix test and the static invariant check cover the new row, the architect line, and the scope contract.
+
 ## Unreleased: agent monitor
 
 - Add `/pstack:monitor` and `pstack-monitor`, a read-only local server with a live node canvas of the agents on this machine: Claude Code and Codex sessions, the subagents they spawn, and each agent's model. Any agent opens into a panel that streams its prompts, replies, thinking, and tool calls. The theme follows the session's harness: warm for Claude Code, blue for Codex.

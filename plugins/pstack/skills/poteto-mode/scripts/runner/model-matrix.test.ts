@@ -30,15 +30,14 @@ const MATRIX_HEADER = [
   "Claude-native agent stem",
 ] as const;
 
-const FAMILY_ORDER = ["fable", "sol", "grok", "opus", "astra", "sol-6", "luna"] as const;
-const GPT6_FAMILIES = ["astra", "sol-6", "luna"] as const;
+const FAMILY_ORDER = ["fable", "sol", "grok", "opus", "astra", "sol-6.1", "sol-6", "luna"] as const;
+const GPT6_FAMILIES = ["astra", "sol-6.1", "sol-6", "luna"] as const;
 const PROVIDERS = ["claude", "codex", "grok"] as const;
 const DESCRIPTOR_RE =
   /(claude|codex|grok):[a-z0-9.-]+@(low|medium|high|xhigh|max)/g;
 const PANEL_ROLES = [
   "arena runners",
   "arena cross-judge pool",
-  "architect runners",
   "interrogate reviewers",
 ] as const;
 const SHEET_ROLES = [
@@ -187,11 +186,14 @@ function defaultDescriptor(row: MatrixRow): string {
   return `${row.provider}:${row.model}@${row.defaultEffort}`;
 }
 
-function parseDefaultPanel(markdown: string): string[] {
+function parseDefaultPanel(
+  markdown: string,
+  heading = "## Default panel"
+): string[] {
   const lines = markdown.split(/\r?\n/);
-  const start = lines.findIndex((line) => line.trim() === "## Default panel");
+  const start = lines.findIndex((line) => line.trim() === heading);
   if (start < 0) {
-    throw new Error("missing ## Default panel");
+    throw new Error(`missing ${heading}`);
   }
   for (let i = start + 1; i < lines.length; i++) {
     if (lines[i].startsWith("## ")) {
@@ -201,7 +203,7 @@ function parseDefaultPanel(markdown: string): string[] {
       return lines[i].match(DESCRIPTOR_RE) ?? [];
     }
   }
-  throw new Error("## Default panel has no descriptor line");
+  throw new Error(`${heading} has no descriptor line`);
 }
 
 function parseFrontmatter(text: string): {
@@ -241,6 +243,10 @@ describe("model matrix", () => {
   const rows = parseModelMatrix(dispatch);
   const setup = readFileSync(SETUP_PATH, "utf8");
   const panel = parseDefaultPanel(dispatch);
+  const architectPanel = parseDefaultPanel(
+    dispatch,
+    "## Default architect panel"
+  );
 
   it("owns the effort universe and first-run defaults", () => {
     expect([...EFFORTS]).toEqual(["low", "medium", "high", "xhigh", "max"]);
@@ -261,6 +267,7 @@ describe("model matrix", () => {
       ["grok", "xhigh"],
       ["opus", "max"],
       ["astra", "high"],
+      ["sol-6.1", "high"],
       ["sol-6", "high"],
       ["luna", "high"],
     ]);
@@ -324,6 +331,7 @@ describe("model matrix", () => {
     );
     expect(gpt6Rows.map((row) => [row.family, row.model])).toEqual([
       ["astra", "gpt-6-astra"],
+      ["sol-6.1", "gpt-6.1-sol"],
       ["sol-6", "gpt-6-sol"],
       ["luna", "gpt-6-luna"],
     ]);
@@ -334,13 +342,16 @@ describe("model matrix", () => {
       expect(row.defaultEffort).toBe("high");
       expect(row.selectableEfforts).toEqual([...EFFORTS]);
       expect(row.claudeNativeAgentStem).toBeNull();
-      expect(sheet).toContain(defaultDescriptor(row));
+      // sol-6 stays selectable; sol-6.1 took its first-run roles.
+      if (row.family !== "sol-6") {
+        expect(sheet).toContain(defaultDescriptor(row));
+      }
     }
     expect(new Set(rows.map((row) => row.family)).size).toBe(rows.length);
     expect(new Set(rows.map((row) => `${row.provider}:${row.model}`)).size)
       .toBe(rows.length);
-    // Solo code roles ride the sol-6 row; exploration and swarm ride luna.
-    const sol6 = defaultDescriptor(rows.find((row) => row.family === "sol-6")!);
+    // Solo code roles ride the sol-6.1 row; exploration and swarm ride luna.
+    const sol6 = defaultDescriptor(rows.find((row) => row.family === "sol-6.1")!);
     const luna = defaultDescriptor(rows.find((row) => row.family === "luna")!);
     for (const role of ["feature, refactoring", "bug-fix", "perf-issue", "hillclimb"]) {
       expect(sheet).toContain(`${role}: ${sol6}\n`);
@@ -351,11 +362,14 @@ describe("model matrix", () => {
     expect(setup).toContain("Its model matrices (stock and flex)");
     expect(setup).toContain("Read the model matrices, stock and flex.");
     expect(setup).toContain("any stock or flex matrix family");
-    expect(setup).toContain("Offer every stock family, including Astra, GPT-6 Sol, and Luna, when changing `architect runners`");
+    expect(setup).toContain("Offer every stock family, including Astra, GPT-6.1 Sol, GPT-6 Sol, and Luna, when changing `architect runners`");
     expect(setup).toContain("Read each model, proposed effort, and selectable efforts from its row.");
     expect(setup).toContain("outside the stock and flex matrix families");
     expect(setup).toContain(
       "| Astra | Astra matrix row + selected effort | external runner | native `spawn_agent` |"
+    );
+    expect(setup).toContain(
+      "| GPT-6.1 Sol | sol-6.1 matrix row + selected effort | external runner | native `spawn_agent` |"
     );
     expect(setup).toContain(
       "| GPT-6 Sol | sol-6 matrix row + selected effort | external runner | native `spawn_agent` |"
@@ -384,6 +398,45 @@ describe("model matrix", () => {
     }
     const providers = new Set(panel.map((descriptor) => descriptor.split(":")[0]));
     expect(providers.size).toBeGreaterThanOrEqual(2);
+  });
+
+  it("owns the architect default: Astra and Fable at matrix default efforts", () => {
+    expect(architectPanel).toEqual([
+      "codex:gpt-6-astra@high",
+      "claude:fable@max",
+    ]);
+    const byDescriptor = new Set(rows.map(defaultDescriptor));
+    for (const descriptor of architectPanel) {
+      expect(byDescriptor.has(descriptor)).toBe(true);
+    }
+    expect(firstRunSheet(setup)).toContain(
+      `architect runners: ${architectPanel.join(", ")}\n`
+    );
+  });
+
+  it("scopes a sheet to the project or globally, and always asks which", () => {
+    const scopeStart = dispatch.indexOf("## Sheet scope");
+    const scopeEnd = dispatch.indexOf("## Flex model matrix");
+    expect(scopeStart).toBeGreaterThan(-1);
+    expect(scopeEnd).toBeGreaterThan(scopeStart);
+    const scope = dispatch.slice(scopeStart, scopeEnd);
+    for (const path of [
+      "`~/.claude/pstack-models.md`",
+      "`<project root>/.claude/pstack-models.md`",
+      "`~/.codex/pstack-models.md`",
+      "`<project root>/.codex/pstack-models.md`",
+    ]) {
+      expect(scope).toContain(path);
+      expect(setup).toContain(path);
+    }
+    expect(scope).toContain("replaces the global sheet");
+    expect(scope).toContain("If the file does not exist, the global sheet applies.");
+    expect(scope).toContain("Never merge the two role by role");
+    expect(setup).toContain("### 1. Establish the parent and scope");
+    expect(setup).toContain("Ask every run; never infer the scope");
+    expect(setup).toContain("load the global sheet instead as the starting assignments");
+    expect(setup).toContain("`.git/info/exclude`");
+    expect(setup).toContain("Never add the sheet to a tracked `.gitignore`, stage it, or commit it.");
   });
 
   it("passes each GPT-6 family's selected model and effort to the existing runner", () => {
