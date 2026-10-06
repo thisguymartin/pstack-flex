@@ -38,7 +38,9 @@ function normalizedUsage(value: unknown): NormalizedUsage | null {
     ),
     outputTokens: finiteNumber(usage.output_tokens),
     reasoningTokens: finiteNumber(
-      usage.reasoning_tokens ?? usage.reasoning_output_tokens
+      usage.reasoning_tokens ??
+        usage.reasoning_output_tokens ??
+        object(usage.output_tokens_details)?.thinking_tokens
     ),
     totalTokens: finiteNumber(usage.total_tokens),
   };
@@ -193,6 +195,11 @@ export function reportedModelMatches(
   if (reported === null) return false;
   if (provider === "claude" && isRollingClaudeAlias(requested)) {
     return concreteModelMatchesRollingAlias(requested, reported);
+  }
+  if (provider === "openrouter") {
+    // Any catalog model can be requested, so a prefix match would accept a
+    // sibling such as z-ai/glm-5.3-air for z-ai/glm-5.3.
+    return reported.toLowerCase() === requested.toLowerCase();
   }
   if (isGatewayProvider(provider)) {
     // Third-party endpoints are inconsistent about slug casing

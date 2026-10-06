@@ -55,6 +55,20 @@ describe("runner CLI parsing", () => {
     expect(parsed?.model).toBe("MiniMax-M3");
   });
 
+  it("passes a namespaced OpenRouter model through unchanged", () => {
+    const parsed = parseArgs(
+      argv().map((value, index, all) =>
+        all[index - 1] === "--provider"
+          ? "openrouter"
+          : all[index - 1] === "--model"
+            ? "moonshotai/kimi-k3"
+            : value
+      )
+    );
+    expect(parsed?.provider).toBe("openrouter");
+    expect(parsed?.model).toBe("moonshotai/kimi-k3");
+  });
+
   it("takes an optional display label and nothing else from it", () => {
     expect(parseArgs(argv())?.label).toBeUndefined();
     expect(parseArgs(argv(["--label", "  arena cross-judge  "]))?.label).toBe("arena cross-judge");
@@ -69,6 +83,6 @@ describe("runner CLI parsing", () => {
           all[index - 1] === "--provider" ? "gemini" : value
         )
       )
-    ).toThrow("deepseek, minimax");
+    ).toThrow("deepseek, minimax, openrouter");
   });
 });

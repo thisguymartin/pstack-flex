@@ -15,6 +15,7 @@ import {
   GATEWAY_INHERITED_CONFLICTS,
   gatewayEnvironment,
   gatewayGuard,
+  openRouterModelRefusal,
 } from "./flex-providers.ts";
 import { versionedClaudeAlias } from "./model-aliases.ts";
 import { parseProviderOutput, reportedModelMatches } from "./parse-output.ts";
@@ -405,7 +406,9 @@ function successfulPreflightEvidence(provider: Provider, model: string): string 
 }
 
 function unavailableStatus(value: string): ReceiptStatus {
-  if (/not logged in|unauthenticated|authentication|sign in|login required/i.test(value)) {
+  // Claude Code 2.1.289 reports a rejected gateway key as "Failed to
+  // authenticate. API Error: 401" with `"api_error_status":401` in its result.
+  if (/not logged in|unauthenticated|authenticat(e|ion)|sign in|login required|"api_error_status":\s*401\b/i.test(value)) {
     return "unauthenticated";
   }
   if (/model.{0,40}(not found|unknown|unavailable|unsupported|not supported|invalid)|invalid.{0,20}model/i.test(value)) {
@@ -537,6 +540,10 @@ export function validateOptions(options: RunnerOptions): void {
       `Claude model ${options.model} is a version pin; normalize it to ${staleAlias} before invoking the runner`
     );
   }
+  const routerRefusal = options.provider === "openrouter"
+    ? openRouterModelRefusal(options.model)
+    : null;
+  if (routerRefusal !== null) throw new UsageError(routerRefusal);
   if (
     options.timeoutMs !== null &&
     (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0)

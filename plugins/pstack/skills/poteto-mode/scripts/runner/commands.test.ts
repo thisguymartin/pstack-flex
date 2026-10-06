@@ -150,6 +150,7 @@ describe("invocationCommand", () => {
     for (const [provider, model] of [
       ["deepseek", "deepseek-flash"],
       ["minimax", "MiniMax-M3"],
+      ["openrouter", "z-ai/glm-5.3"],
     ] as const) {
       const gateway = invocationCommand(options({ provider, model }));
       const claude = invocationCommand(
@@ -162,7 +163,7 @@ describe("invocationCommand", () => {
   });
 
   it("preflights gateway lanes with a version probe, not an auth check", () => {
-    for (const provider of ["deepseek", "minimax"] as const) {
+    for (const provider of ["deepseek", "minimax", "openrouter"] as const) {
       const spec = preflightCommand(provider);
       expect(spec.command).toBe("claude");
       expect(spec.args).toEqual(["--version"]);

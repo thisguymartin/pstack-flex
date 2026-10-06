@@ -48,10 +48,11 @@ Every pstack role (who writes code, who explores, who sits on a review panel) ma
 | `deepseek-pro` | `deepseek:deepseek-v4-pro@high` | `DEEPSEEK_API_KEY` | none; selectable |
 | `minimax` | `minimax:MiniMax-M3@high` | `MINIMAX_API_KEY` | none; selectable |
 | `minimax-preview` | `minimax:MiniMax-M3.1-Flash-Preview@high` | `MINIMAX_API_KEY` (Token Plan) | none; selectable |
+| `openrouter` | `openrouter:<namespace>/<model>@high`, any OpenRouter model | `OPENROUTER_API_KEY` | none; selectable |
 
-The default review panel is `claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max`: four lanes across three providers. Architect sketches default to `codex:gpt-6-astra@high, claude:fable@max`. Any family can take any role. Panels must span at least two providers, and two models from one provider count as one, because the adversarial signal comes from model diversity.
+The default review panel is `claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max`: four lanes across three providers. Architect sketches default to `codex:gpt-6-astra@high, claude:fable@max`. Any family can take any role. Panels must span at least two providers, and two models from one provider count as one, because the adversarial signal comes from model diversity. An OpenRouter lane counts as the lab that made its model.
 
-The DeepSeek and MiniMax lanes run the stock `claude` binary against the lab's Anthropic-compatible endpoint with that lab's key, in an isolated config directory, with inherited Anthropic routing stripped. A lane refuses to start if it finds a claude.ai login in that directory, so a subscription credential can never reach a third-party endpoint. Their receipts keep real token usage but set `costUsd` to null (Claude Code prices at Anthropic rates); the price table is in [docs/LANES.md](docs/LANES.md). Anthropic does not support pointing Claude Code at non-Anthropic endpoints; use synthetic data for gateway testing and keep keys in your local environment.
+The DeepSeek, MiniMax, and OpenRouter lanes run the stock `claude` binary against an Anthropic-compatible endpoint with that provider's key, in an isolated config directory, with inherited Anthropic routing stripped. A lane refuses to start if it finds a claude.ai login in that directory, so a subscription credential can never reach a third-party endpoint. Their receipts keep real token usage but set `costUsd` to null (Claude Code prices at Anthropic rates); the price table is in [docs/LANES.md](docs/LANES.md). Anthropic does not support pointing Claude Code at non-Anthropic endpoints; use synthetic data for gateway testing and keep keys in your local environment. Through OpenRouter, a role can use any model in its catalog, such as `openrouter:moonshotai/kimi-k3@high`; setup's live probe on that model is the only gate.
 
 ### How a role becomes a lane
 
@@ -62,7 +63,7 @@ flowchart LR
     P -->|"any other provider"| R["pstack-runner<br/>one process per lane"]
     R --> C1["codex CLI"]
     R --> C2["grok CLI"]
-    R --> C3["claude CLI + env<br/>DeepSeek or MiniMax endpoint"]
+    R --> C3["claude CLI + env<br/>DeepSeek, MiniMax, or OpenRouter endpoint"]
     N --> O["Output + receipt<br/>model, effort, tokens, status"]
     C1 --> O
     C2 --> O
@@ -73,7 +74,7 @@ The parent resolves every route once, before fan-out. Children never detect the 
 
 ## Install
 
-You need a current Claude Code or Codex installation and [Bun](https://bun.sh) for the lane runner. Sign in only to the CLIs whose plans you have (Claude Code, Codex, Grok), and export `DEEPSEEK_API_KEY` or `MINIMAX_API_KEY` in the shell that starts your session for the gateway lanes. Any subset works, down to a zero-subscription setup on two keys.
+You need a current Claude Code or Codex installation and [Bun](https://bun.sh) for the lane runner. Sign in only to the CLIs whose plans you have (Claude Code, Codex, Grok), and export `DEEPSEEK_API_KEY`, `MINIMAX_API_KEY`, or `OPENROUTER_API_KEY` in the shell that starts your session for the gateway lanes. Any subset works, down to a zero-subscription setup on two keys.
 
 ### Claude Code
 
@@ -180,10 +181,10 @@ Both apps read the same pstack skills. Only the way they start those skills and 
 | Start poteto-mode | Run `/pstack:poteto-mode` or ask for pstack by name. A small startup instruction keeps Claude from starting pstack skills on its own. | Ask for `pstack:poteto-mode` by name. Codex runs the same startup instruction, so pstack skills also wait for a request there. |
 | Runs inside the app | Claude models stay inside Claude Code. | The Codex families stay inside Codex. |
 | Other models | The Codex families and Grok run through their signed-in command-line tools. | Claude and Grok run through their signed-in command-line tools. |
-| Gateway models | DeepSeek and MiniMax always run through the external runner with an isolated config directory, never as a native agent. | Same. |
+| Gateway models | DeepSeek, MiniMax, and OpenRouter always run through the external runner with an isolated config directory, never as a native agent. | Same. |
 | Skills and workflows | Shared with Codex. | Shared with Claude Code. |
 
-Grok, DeepSeek, and MiniMax can take part in a multi-model review. You cannot use any of them as the main app running pstack.
+Grok, DeepSeek, MiniMax, and OpenRouter models can take part in a multi-model review. You cannot use any of them as the main app running pstack.
 
 ## Upstream
 

@@ -6,7 +6,7 @@ The walkthrough: what this plugin is, how work flows through it, how to set it u
 
 pstack is a plugin of engineering skills, playbooks, and small local tools for coding agents — not a model, not a service. You hand `poteto-mode` a task; it matches the task to a playbook, works the steps, and leaves evidence (diffs, runs, receipts) you can inspect instead of asking for trust. Its sharpest edge is multi-model adversarial review: several different model families challenge important work, because the adversarial signal comes from model diversity, not assigned personas.
 
-pstack-flex adds one thing on top: **you choose the models and the compute**. Any subset of families works, and two open labs — DeepSeek and MiniMax — are first-class lanes on plain API keys, down to a zero-subscription setup.
+pstack-flex adds one thing on top: **you choose the models and the compute**. Any subset of families works, and two open labs — DeepSeek and MiniMax — are first-class lanes on plain API keys, down to a zero-subscription setup. With one OpenRouter key, a role can use any model in OpenRouter's catalog.
 
 If you also use my [thisguyskills](https://github.com/thisguymartin/skills) collection: that repo decides **what** to build (shaping, spec, Linear, handoff) and its handoff ends with "Use `pstack:poteto-mode`" — which is exactly where this repo picks up.
 
@@ -23,11 +23,13 @@ flowchart TD
     F --> N3["grok:grok-4.7<br/>grok CLI (Grok sub)"]
     F --> G1["deepseek:deepseek-flash<br/>runner + env -> DeepSeek API (key)"]
     F --> G2["minimax:MiniMax-M3<br/>runner + env -> MiniMax API (key)"]
+    F --> G3["openrouter:any/model<br/>runner + env -> OpenRouter API (key)"]
     N1 --> R[Outputs + receipts]
     N2 --> R
     N3 --> R
     G1 --> R
     G2 --> R
+    G3 --> R
     R --> V[Verification: run it, judge it,<br/>cross-model consensus]
     V --> PR([Review-ready PR])
 ```
@@ -57,21 +59,23 @@ Plus [Bun](https://bun.sh) for the lane runner, and `multi_agent = true` under `
 
 ## Keys for the gateway lanes
 
-DeepSeek and MiniMax have no login flow here; their lanes read an API key from your environment at spawn time. The runner never writes keys to disk or receipts, so the only question is how the env gets populated. Don't paste keys into `.zshrc` — store them encrypted and load on demand. macOS Keychain, built in and free:
+DeepSeek, MiniMax, and OpenRouter have no login flow here; their lanes read an API key from your environment at spawn time. The runner never writes keys to disk or receipts, so the only question is how the env gets populated. Don't paste keys into `.zshrc` — store them encrypted and load on demand. macOS Keychain, built in and free:
 
 ```zsh
 # once: store each key (prompts for the value, nothing in shell history)
 security add-generic-password -a "$USER" -s pstack-deepseek -w
 security add-generic-password -a "$USER" -s pstack-minimax -w
+security add-generic-password -a "$USER" -s pstack-openrouter -w
 
 # in .zshrc: a function, not an export — keys enter env only when you call it
 pstack-keys() {
   export DEEPSEEK_API_KEY=$(security find-generic-password -a "$USER" -s pstack-deepseek -w)
   export MINIMAX_API_KEY=$(security find-generic-password -a "$USER" -s pstack-minimax -w)
+  export OPENROUTER_API_KEY=$(security find-generic-password -a "$USER" -s pstack-openrouter -w)
 }
 ```
 
-Daily flow: `pstack-keys -> claude -> /pstack:poteto-mode`. Alternatives, the threat model, and the spend-cap advice are in [LANES.md](LANES.md#storing-keys). Set spend caps on both provider dashboards; that is the real blast-radius control.
+Daily flow: `pstack-keys -> claude -> /pstack:poteto-mode`. Alternatives, the threat model, and the spend-cap advice are in [LANES.md](LANES.md#storing-keys). Set spend caps on each provider dashboard (on OpenRouter, a credit limit on the key); that is the real blast-radius control.
 
 ## First-time setup: /setup-pstack
 
@@ -194,7 +198,7 @@ sequenceDiagram
     participant P as Parent session
     participant R as pstack-runner
     participant C as claude -p (subprocess)
-    participant D as DeepSeek / MiniMax API
+    participant D as DeepSeek / MiniMax / OpenRouter API
     P->>R: lane: deepseek:deepseek-flash@high
     R->>R: guard: DEEPSEEK_API_KEY set?<br/>config dir free of OAuth creds?
     Note over R: refusal = unauthenticated receipt,<br/>no subprocess ever spawned
@@ -255,3 +259,13 @@ bug-fix: codex:gpt-5.6-sol@max
 ## Selecting the additional gateway models
 
 Run `/setup-pstack` and assign `deepseek-pro` (`deepseek:deepseek-v4-pro@high`) or `minimax-preview` (`minimax:MiniMax-M3.1-Flash-Preview@high`) to named roles. Existing `deepseek` and `minimax` choices remain available. Each model has its own effort selection and live probe. MiniMax preview requires an eligible Token Plan key in `MINIMAX_API_KEY`; see [model choices and thinking controls](LANES.md#multiple-models-per-provider). No existing assignment changes until setup succeeds and you confirm the rendered sheet.
+
+## Using any model through OpenRouter
+
+Export `OPENROUTER_API_KEY`, run `/setup-pstack`, and give a role any model ID from [OpenRouter's catalog](https://openrouter.ai/models), written with its namespace:
+
+```text
+interrogate reviewers: claude:fable@max, openrouter:moonshotai/kimi-k3@high, openrouter:z-ai/glm-5.3@high
+```
+
+There is no list to pick from. Setup probes the exact model you name, with a marker the model has to read from a file, and writes nothing if the probe fails. The only refused IDs are OpenRouter's own routers (`openrouter/auto`, `openrouter/free`), because they choose the model for you. Panel diversity counts the lab behind the model, so the sheet above spans three providers. Turn off data collection on OpenRouter's privacy settings, or require zero-data-retention hosts, before sending real code. See [LANES.md](LANES.md#openrouter-any-model-one-key).
