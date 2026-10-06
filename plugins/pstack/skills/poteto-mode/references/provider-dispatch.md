@@ -15,6 +15,7 @@ pstack model choices are provider-qualified descriptors:
 | grok | grok-4.7-xhigh-fast | grok | grok-4.7 | xhigh | low medium high xhigh max | - |
 | opus | opus | claude | opus | max | low medium high xhigh max | opus |
 | astra | - | codex | gpt-6-astra | high | low medium high xhigh max | - |
+| sol-6.1 | - | codex | gpt-6.1-sol | high | low medium high xhigh max | - |
 | sol-6 | - | codex | gpt-6-sol | high | low medium high xhigh max | - |
 | luna | - | codex | gpt-6-luna | high | low medium high xhigh max | - |
 
@@ -22,15 +23,38 @@ The allowed effort universe is exactly `low`, `medium`, `high`, `xhigh`, `max`. 
 
 `fable` and `opus` are Claude Code's rolling aliases. Claude resolves each alias to the latest available family revision. A runner receipt keeps the requested alias in `model` and the concrete provider-reported revision in `reportedModel`; verification accepts only a numeric `claude-fable-*` or `claude-opus-*` revision from the matching family.
 
-The `astra`, `sol-6`, and `luna` rows are the GPT-6 Codex families (pstack-flex addition). These Codex families use native `spawn_agent` under a Codex parent and the external Codex runner under a Claude Code parent. Each is its own family with its own requested effort and probe; `sol-6` is independent of `sol`, so an existing GPT-5.6 Sol assignment stays unchanged until setup reassigns the role. All Codex families count as one provider for panel diversity.
+The `astra`, `sol-6.1`, `sol-6`, and `luna` rows are the GPT-6 Codex families (pstack-flex addition). These Codex families use native `spawn_agent` under a Codex parent and the external Codex runner under a Claude Code parent. Each is its own family with its own requested effort and probe; `sol-6.1`, `sol-6`, and `sol` are independent of each other, so an existing GPT-6 Sol or GPT-5.6 Sol assignment stays unchanged until setup reassigns the role. All Codex families count as one provider for panel diversity.
 
 ## Default panel
 
-The first-run panel roles (`arena runners`, `arena cross-judge pool`, `architect runners`, `interrogate reviewers`) use these four lanes, one per entry, at each family's default effort:
+The first-run panel roles (`arena runners`, `arena cross-judge pool`, `interrogate reviewers`) use these four lanes, one per entry, at each family's default effort:
 
 `claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max`
 
-This line is the single source for the panel default. `setup-pstack`'s first-run sheet and the `arena`, `architect`, and `interrogate` skills copy it verbatim; the static invariant check fails when they drift. Solo code-writing roles (`feature, refactoring`, `bug-fix`, `perf-issue`, `hillclimb`) default to the `sol-6` row; exploration and swarm roles default to the `luna` row.
+This line is the single source for the panel default. `setup-pstack`'s first-run sheet and the `arena` and `interrogate` skills copy it verbatim; the static invariant check fails when they drift. Solo code-writing roles (`feature, refactoring`, `bug-fix`, `perf-issue`, `hillclimb`) default to the `sol-6.1` row; exploration and swarm roles default to the `luna` row.
+
+## Default architect panel
+
+The first-run `architect runners` role uses two lanes, one per entry, at each family's default effort:
+
+`codex:gpt-6-astra@high, claude:fable@max`
+
+This line is the single source for the architect default. `setup-pstack`'s first-run sheet and the `architect` skill copy it verbatim; the static invariant check fails when they drift.
+
+## Sheet scope
+
+pstack-flex addition. A model sheet is either global or project-scoped.
+
+| Parent | Global sheet | Project sheet |
+|---|---|---|
+| Claude Code | `~/.claude/pstack-models.md` | `<project root>/.claude/pstack-models.md` |
+| Codex | `~/.codex/pstack-models.md` | `<project root>/.codex/pstack-models.md` |
+
+The project root is the top level of the repository's primary checkout, so every worktree of one repository shares one project sheet. Read it as the parent directory of `git rev-parse --path-format=absolute --git-common-dir`. Outside a git repository there is no project sheet.
+
+Before the first configured role launches in a run, the parent reads its project sheet path once. If the file exists, it is the model sheet for the whole run and replaces the global sheet, including a global sheet already loaded into context. If the file does not exist, the global sheet applies. Never merge the two role by role: every sheet carries every documented role, so one sheet always answers. Say which sheet is in use when reporting a panel.
+
+A project sheet is private to the machine. `setup-pstack` writes it, lists it in `.git/info/exclude`, and never commits it. Deleting the file returns the project to the global sheet.
 
 ## Flex model matrix
 

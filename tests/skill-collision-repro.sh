@@ -73,32 +73,38 @@ else
 fi
 
 # Static invariant (CHANGES maintenance note): provider-dispatch's "## Default panel"
-# line is the default panel. The setup-pstack panel rows and the arena, architect,
-# and interrogate defaults copy it verbatim.
+# line is the default panel. The setup-pstack panel rows and the arena and
+# interrogate defaults copy it verbatim. "## Default architect panel" plays the
+# same part for architect runners.
 setup="$repo/plugins/pstack/skills/setup-pstack/SKILL.md"
 dispatch="$repo/plugins/pstack/skills/poteto-mode/references/provider-dispatch.md"
 quad_of() { { grep -oE '(claude|codex|grok):[a-z0-9.-]+@(low|medium|high|xhigh|max)' || true; } | tr '\n' ' ' | sed 's/ $//'; }
-canon_panel="$(awk '
-  $0 == "## Default panel" { in_panel = 1; next }
+panel_under() { awk -v heading="$1" '
+  $0 == heading { in_panel = 1; next }
   in_panel && /^## / { exit }
   in_panel && /^`/ { print; exit }
-' "$dispatch" | quad_of)"
+' "$dispatch" | quad_of; }
+canon_panel="$(panel_under "## Default panel")"
+canon_architect="$(panel_under "## Default architect panel")"
 panel_bad=""
 [ -n "$canon_panel" ] || panel_bad="could not read the canonical panel from $dispatch"$'\n'
+[ -n "$canon_architect" ] || panel_bad="${panel_bad}could not read the canonical architect panel from $dispatch"$'\n'
 # Anchor on the panel's last slug rather than a hard-coded one, so a model swap in
 # setup-pstack cannot leave this check hunting for a slug nobody ships any more.
-anchor="${canon_panel##* }"
-# arena and architect each state the panel on one line; interrogate lists it
+# arena and architect each state their panel on one line; interrogate lists it
 # as one slug per row of its Reviewer A/B/C/D table (upstream #167).
 for name in arena architect; do
   skill="$repo/plugins/pstack/skills/$name/SKILL.md"
+  want="$canon_panel"
+  [ "$name" = architect ] && want="$canon_architect"
+  anchor="${want##* }"
   n="$(grep -Fc "$anchor" "$skill" || true)"
   if [ "$n" != "1" ]; then
     panel_bad="$panel_bad$skill: expected exactly 1 default-panel line, found $n"$'\n'
     continue
   fi
   got="$(grep -F "$anchor" "$skill" | quad_of)"
-  [ "$got" = "$canon_panel" ] || panel_bad="$panel_bad$skill: [$got] != [$canon_panel]"$'\n'
+  [ "$got" = "$want" ] || panel_bad="$panel_bad$skill: [$got] != [$want]"$'\n'
 done
 interrogate="$repo/plugins/pstack/skills/interrogate/SKILL.md"
 got="$(grep -E '^\| Reviewer [A-Z] \|' "$interrogate" | quad_of)"
@@ -106,13 +112,15 @@ got="$(grep -E '^\| Reviewer [A-Z] \|' "$interrogate" | quad_of)"
 while IFS= read -r line; do
   got="$(printf '%s\n' "$line" | quad_of)"
   [ "$got" = "$canon_panel" ] || panel_bad="$panel_bad$setup role row: [$got] != [$canon_panel]"$'\n'
-done < <(grep -E '^(arena runners|arena cross-judge pool|architect runners|interrogate reviewers):' "$setup")
+done < <(grep -E '^(arena runners|arena cross-judge pool|interrogate reviewers):' "$setup")
+got="$(grep -E '^architect runners:' "$setup" | quad_of)"
+[ "$got" = "$canon_architect" ] || panel_bad="$panel_bad$setup architect runners: [$got] != [$canon_architect]"$'\n'
 if [ -n "$panel_bad" ]; then
   note "FAIL: the default model panel is not identical across provider dispatch, the panel skills, and setup-pstack:"
   note "$panel_bad"
   fail=1
 else
-  note "ok: default model panel identical across provider dispatch + 3 panel skills + setup-pstack ($canon_panel)"
+  note "ok: default model panel identical across provider dispatch + 3 panel skills + setup-pstack ($canon_panel; architect $canon_architect)"
 fi
 
 plugin="$repo/plugins/pstack"
@@ -334,14 +342,14 @@ else
 fi
 
 sol_descriptor="$(awk -F '|' '
-  $2 ~ /^[[:space:]]*sol-6[[:space:]]*$/ {
+  $2 ~ /^[[:space:]]*sol-6\.1[[:space:]]*$/ {
     for (i = 4; i <= 6; i++) gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i)
     print $4 ":" $5 "@" $6
   }
 ' "$dispatch")"
 solo_code_bad=""
 if [ -z "$sol_descriptor" ]; then
-  solo_code_bad="could not read the sol-6 row from $dispatch"$'\n'
+  solo_code_bad="could not read the sol-6.1 row from $dispatch"$'\n'
 fi
 for role in bug-fix perf-issue hillclimb; do
   setup_descriptor="$(sed -n "s/^${role}: //p" "$setup")"
@@ -355,11 +363,11 @@ for role in bug-fix perf-issue hillclimb; do
   fi
 done
 if [ -n "$solo_code_bad" ]; then
-  note "FAIL: solo code roles must use the sol-6 row:"
+  note "FAIL: solo code roles must use the sol-6.1 row:"
   note "$solo_code_bad"
   fail=1
 else
-  note "ok: solo code roles stay on the sol-6 row ($sol_descriptor)"
+  note "ok: solo code roles stay on the sol-6.1 row ($sol_descriptor)"
 fi
 
 codex_manifest="$plugin/.codex-plugin/plugin.json"

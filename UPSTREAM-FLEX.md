@@ -32,9 +32,9 @@ All flex changes are additive and live in port-owned files so upstream merges st
 
 - `plugins/pstack/skills/poteto-mode/scripts/runner/flex-providers.ts` and `flex-providers.test.ts` (new)
 - Gateway-provider hooks in `runner/{types,commands,run,parse-output,cli}.ts` and their tests
-- The three GPT-6 rows in the stock model matrix, the "Default panel" section, the "Flex model matrix" section, and the route-table columns in `references/provider-dispatch.md`
+- The four GPT-6 rows in the stock model matrix, the "Default panel", "Default architect panel", and "Sheet scope" sections, the "Flex model matrix" section, and the route-table columns in `references/provider-dispatch.md`
 - The first-run sheet in `skills/setup-pstack/SKILL.md` and the default descriptors named in `arena`, `architect`, `interrogate`, `how`, `swarm`, and the `feature`, `refactoring`, `bug-fix`, `perf-issue`, and `hillclimb` playbooks
-- The assignment-first restructure of `skills/setup-pstack/SKILL.md`
+- The assignment-first restructure of `skills/setup-pstack/SKILL.md`, and its project-or-global scope question, project sheet paths, and `.git/info/exclude` write
 - `docs/LANES.md`, this file, the README fork section, and the NOTICE/LICENSE/CHANGES additions
 - `plugins/pstack/hooks/session-start-context.md`, which the fork rewrote from open-pstack's auto-fire mandate into an opt-in gate, and the docs lines that describe it
 - The `intake` and `diff-behavior` skills: `plugins/pstack/skills/intake/` and `plugins/pstack/skills/diff-behavior/`. Upstream has no equivalent, so they never conflict.
