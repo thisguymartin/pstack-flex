@@ -1,84 +1,19 @@
 # pstack-flex
 
 [![CI](https://github.com/thisguymartin/pstack-flex/actions/workflows/ci.yml/badge.svg)](https://github.com/thisguymartin/pstack-flex/actions/workflows/ci.yml)
-[![Based on open-pstack v1.5.0](https://img.shields.io/badge/based%20on-open--pstack%20v1.5.0-blue)](https://github.com/ericlitman/open-pstack/releases/tag/v1.5.0)
 [![MIT license](https://img.shields.io/github/license/thisguymartin/pstack-flex)](LICENSE)
 
-**pstack-flex runs [Lauren Tan (@poteto)](https://x.com/poteto)'s [pstack](https://github.com/cursor/plugins/tree/main/pstack) in Claude Code and Codex on the models you actually have.** It is built on [ericlitman/open-pstack](https://github.com/ericlitman/open-pstack), which translates pstack's Cursor-specific parts for Claude Code and Codex. open-pstack assumes four frontier subscriptions. pstack-flex keeps its skills and workflows, changes which models setup accepts and how they are reached, and adds its own skills. The agent monitor lives in its own repository, [psf-monitor](https://github.com/thisguymartin/psf-monitor).
+pstack-flex is a portable version of [Lauren Tan's pstack](https://github.com/cursor/plugins/tree/main/pstack): one shared skill and workflow system, with adapters for coding agents and model providers. It builds on [open-pstack](https://github.com/ericlitman/open-pstack). Claude Code and Codex are supported; OpenCode is beta and has not passed the installed live gate.
 
-Lauren built pstack from the skills she uses to ship code at Cursor. In a [55-minute interview with Denis Labelle](https://x.com/DenisLabelle/status/2091337807939706928), she says that she shipped 1,000 pull requests in one month after steadily improving how her agents work and verify their results.
-
-> If you want to go fast, go deep first.
-
-If Cursor is your main coding environment, use [Lauren's original pstack](https://github.com/cursor/plugins/tree/main/pstack). If you hold all four subscriptions and want the closest translation, use [open-pstack](https://github.com/ericlitman/open-pstack). If you want to pick your own models, pay per token where it makes sense, or run with no subscription at all, use this repository.
-
-## What pstack does
-
-pstack is a plugin for coding agents. It is not a new model or a hosted service. It gives your agent engineering rules, step-by-step workflows for different kinds of work, focused skills, and small local tools.
-
-The normal entry point is `poteto-mode`. You give it a task in plain language. It then:
-
-- reads the task and chooses a workflow that fits;
-- learns how the current system works before changing it;
-- compares designs when the choice matters;
-- favors small, simple changes over extra machinery;
-- asks several models to challenge important decisions when useful;
-- runs the code and checks real behavior instead of stopping at "the tests pass"; and
-- carries the work through review, continuous integration (CI), and a ready-to-merge pull request when asked.
-
-![How pstack routes a task through focused skills, real-app proof, and a review-ready pull request](assets/pstack-workflow.png)
-
-pstack does not ask you to trust an agent on day one. It helps the agent leave evidence you can inspect. Start with supervised work. Let it run more work in parallel only after its checks have earned that trust in your own repositories.
-
-## The models
-
-Every pstack role (who writes code, who explores, who sits on a review panel) maps to one family. A family is one `(provider, model)` pair with its own requested effort and its own live probe in setup. These are the families pstack-flex ships:
-
-| Family | Descriptor at default effort | Needs | First-run role |
-| --- | --- | --- | --- |
-| `fable` | `claude:fable@max` | Claude Code login | judgment, prose, explanation, hardest tasks, panels |
-| `opus` | `claude:opus@max` | Claude Code login | panels |
-| `astra` | `codex:gpt-6-astra@high` | Codex (ChatGPT) login | panels |
-| `sol-6.1` | `codex:gpt-6.1-sol@high` | Codex (ChatGPT) login | feature, refactoring, bug-fix, perf-issue, hillclimb |
-| `sol-6` | `codex:gpt-6-sol@high` | Codex (ChatGPT) login | none; selectable |
-| `luna` | `codex:gpt-6-luna@high` | Codex (ChatGPT) login | how explorer, swarm workers |
-| `sol` | `codex:gpt-5.6-sol@max` | Codex (ChatGPT) login | none; selectable |
-| `grok` | `grok:grok-4.7@xhigh` | Grok CLI login | panels |
-| `deepseek` | `deepseek:deepseek-flash@high` | `DEEPSEEK_API_KEY` | none; selectable |
-| `deepseek-pro` | `deepseek:deepseek-v4-pro@high` | `DEEPSEEK_API_KEY` | none; selectable |
-| `minimax` | `minimax:MiniMax-M3@high` | `MINIMAX_API_KEY` | none; selectable |
-| `minimax-preview` | `minimax:MiniMax-M3.1-Flash-Preview@high` | `MINIMAX_API_KEY` (Token Plan) | none; selectable |
-| `openrouter` | `openrouter:<namespace>/<model>@high`, any OpenRouter model | `OPENROUTER_API_KEY` | none; selectable |
-
-The default review panel is `claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max`: four lanes across three providers. Architect sketches default to `codex:gpt-6-astra@high, claude:fable@max`. Any family can take any role. Panels must span at least two providers, and two models from one provider count as one, because the adversarial signal comes from model diversity. An OpenRouter lane counts as the lab that made its model.
-
-The DeepSeek, MiniMax, and OpenRouter lanes run the stock `claude` binary against an Anthropic-compatible endpoint with that provider's key, in an isolated config directory, with inherited Anthropic routing stripped. A lane refuses to start if it finds a claude.ai login in that directory, so a subscription credential can never reach a third-party endpoint. Their receipts keep real token usage but set `costUsd` to null (Claude Code prices at Anthropic rates); the price table is in [docs/LANES.md](docs/LANES.md). Anthropic does not support pointing Claude Code at non-Anthropic endpoints; use synthetic data for gateway testing and keep keys in your local environment. Through OpenRouter, a role can use any model in its catalog, such as `openrouter:moonshotai/kimi-k3@high`; setup's live probe on that model is the only gate.
-
-### How a role becomes a lane
-
-```mermaid
-flowchart LR
-    S["pstack-models.md<br/>role -> provider:model@effort"] --> P["Parent harness<br/>(Claude Code or Codex)"]
-    P -->|"parent's own provider"| N["Native subagent<br/>Agent / spawn_agent"]
-    P -->|"any other provider"| R["pstack-runner<br/>one process per lane"]
-    R --> C1["codex CLI"]
-    R --> C2["grok CLI"]
-    R --> C3["claude CLI + env<br/>DeepSeek, MiniMax, or OpenRouter endpoint"]
-    N --> O["Output + receipt<br/>model, effort, tokens, status"]
-    C1 --> O
-    C2 --> O
-    C3 --> O
-```
-
-The parent resolves every route once, before fan-out. Children never detect the harness or pick a model. A lane that cannot start drops out with a named receipt; nothing substitutes a weaker model or invents a timeout.
+Give `poteto-mode` a task. It chooses a playbook, investigates the current system, settles the design, makes the change, and verifies real behavior. Skills such as `architect`, `arena`, and `interrogate` can compare work across models. You choose each role's models in a local model sheet.
 
 ## Install
 
-You need a current Claude Code or Codex installation and [Bun](https://bun.sh) for the lane runner. Sign in only to the CLIs whose plans you have (Claude Code, Codex, Grok), and export `DEEPSEEK_API_KEY`, `MINIMAX_API_KEY`, or `OPENROUTER_API_KEY` in the shell that starts your session for the gateway lanes. Any subset works, down to a zero-subscription setup on two keys.
+Install [Bun](https://bun.sh) for the external lane runner. Install and authenticate only the provider CLIs you assign to roles. Gateway lanes read `DEEPSEEK_API_KEY`, `MINIMAX_API_KEY`, or `OPENROUTER_API_KEY` from the session's environment. Use synthetic data for gateway testing.
 
 ### Claude Code
 
-Run these commands inside Claude Code:
+Run inside Claude Code:
 
 ```text
 /plugin marketplace add thisguymartin/pstack-flex
@@ -88,118 +23,78 @@ Run these commands inside Claude Code:
 
 ### Codex
 
-Run these commands in your shell:
+Run in your shell:
 
 ```shell
 codex plugin marketplace add thisguymartin/pstack-flex --ref main
 codex plugin add pstack@pstack-flex
 ```
 
-Turn on Codex subagents in `~/.codex/config.toml` so pstack can compare work in parallel:
+Enable subagents in your Codex config, normally `~/.codex/config.toml`:
 
 ```toml
 [features]
 multi_agent = true
 ```
 
-Start a new Codex task after installation so it can discover the new skills and setting.
+Start a new task after installation. The marketplace is `pstack-flex`; the plugin and skill namespace remain `pstack`. If an older installation uses `pstack@open-pstack`, check its source repository before removing it. Keep only one active `pstack` installation.
 
-## Get started
+### OpenCode beta
 
-### 1. Set up the models
+Clone the repository:
 
-In Claude Code, run:
-
-```text
-/pstack:setup-pstack
+```shell
+git clone https://github.com/thisguymartin/pstack-flex ~/src/pstack-flex
 ```
 
-In Codex, ask:
+Add the checkout to your [OpenCode config](https://opencode.ai/docs/config/), normally `~/.config/opencode/opencode.jsonc`:
 
-```text
-Use pstack:setup-pstack to configure pstack.
+```jsonc
+{
+	"skills": { "paths": ["~/src/pstack-flex/plugins/pstack/skills"] },
+	"instructions": ["~/src/pstack-flex/plugins/pstack/hooks/session-start-context.md"]
+}
 ```
 
-Setup is assignment-first. It shows the role map, asks which roles to change, asks one effort per assigned family, probes only those families with a real one-turn run, and writes nothing until every probe passes and you confirm. A fresh run proposes the defaults in the table above. An existing sheet keeps its assignments until you change a named role.
+OpenCode loads skills under bare names such as `poteto-mode`. Every provider-qualified role uses the external runner. Only `inherit-parent` and `auto` use its native `task` tool. OpenCode writer lanes can edit their worktree but cannot run shell commands, Git commands, tests, or builds. A task requiring those tools must report the unsupported requirement. Headless CI use is unsupported.
 
-Setup first asks which scope to configure. The global sheet lives at `~/.claude/pstack-models.md` (Claude Code) or `~/.codex/pstack-models.md` (Codex). A project sheet lives at `.claude/pstack-models.md` or `.codex/pstack-models.md` in the repository root. It replaces the global sheet for that project, stays out of git through `.git/info/exclude`, and starts from your global assignments. A project without one uses the global sheet; delete the project sheet to go back. Change either sheet by rerunning setup rather than editing it by hand, so every choice is probed before it is saved.
-
-A model sheet from an earlier release keeps its panel. To take the new defaults, delete those role lines and run setup again; setup fills missing roles from the defaults. A `grok:grok-4.6` entry keeps running until the next setup run asks you to replace it.
-
-### 2. Use poteto-mode
-
-Start any task that needs careful engineering with `poteto-mode`.
+## Configure and run
 
 In Claude Code:
 
 ```text
-/pstack:poteto-mode Add saved filters to search. Keep the design simple, verify it in the real app, and open a pull request.
+/pstack:setup-pstack
+/pstack:poteto-mode Add saved filters to search. Verify it in the app.
 ```
 
 In Codex:
 
 ```text
-Use pstack:poteto-mode. Add saved filters to search. Keep the design simple, verify it in the real app, and open a pull request.
+Use pstack:setup-pstack to configure pstack.
+Use pstack:poteto-mode. Add saved filters to search. Verify it in the app.
 ```
 
-For that feature, poteto-mode should first understand how search works today. It should decide how the data should be represented before writing code, implement the smallest complete version, run the feature the way a user would, review the result, and prepare the pull request.
+In OpenCode beta, ask for `setup-pstack`, then `poteto-mode` by their bare names.
 
-That is the main workflow. The other skills are there when poteto-mode needs them or when you want to call one directly. **[docs/USAGE.md](docs/USAGE.md)** is the longer walkthrough: three setup configurations (full frontier, hybrid saver, zero-subscription), copy-paste examples for the daily skills, how to read receipts, and troubleshooting.
+Setup asks for global or project scope, role assignments, and one effort per assigned model family. It probes each assigned family and writes only after all probes pass and you confirm. Existing assignments stay until you change them. See the [model matrix and dispatch contract](plugins/pstack/skills/poteto-mode/references/provider-dispatch.md) for supported descriptors and defaults.
 
-### 3. Watch your agents (optional)
+Each app has its own global sheet. A project sheet replaces that app's global sheet for the whole repository, including its worktrees. See [sheet paths and overrides](docs/reference.md#model-sheets). Rerun setup to change assignments with a live probe.
 
-The agent monitor is a separate plugin, [psf-monitor](https://github.com/thisguymartin/psf-monitor). Install it next to pstack to watch each pstack session, the agents it spawned, and the external lanes pstack launched, live, and to cancel a running lane from the page.
+pstack runs when you name it or keep a standing instruction for it. Once started, it can invoke the skills its workflow needs. A failed lane becomes a named dropout. The runner never substitutes a weaker model or adds an implicit timeout. External lanes use the selected CLI account or gateway key and can incur usage charges.
 
-## Useful skills
+## Find the right reference
 
-| Skill | Use it when |
-| --- | --- |
-| `how` | You want a clear explanation of how part of the system works. |
-| `why` | You want evidence for why the system was built that way. |
-| `architect` | A change crosses a function or module boundary and the design needs to be settled first. |
-| `arena` | You want several complete attempts, followed by a comparison of their best parts. |
-| `interrogate` | You want different models to try to break a design or diff. |
-| `create-verification-skill` | Your project has no repeatable way for an agent to prove real behavior. |
-| `maintain-verification-skill` | The project's verification instructions no longer match the product. |
-| `babysit` | A pull request needs CI failures and review comments handled until it is ready. |
-| `reflect` | A hard task is finished and its lessons should improve the next run. |
-| `intake` | You have GitHub issues and want each turned into a ready-to-run brief with a playbook, an observable exit condition, and a worktree. |
-| `diff-behavior` | You want to know what a change did from the outside: the same scenarios on trunk and head, with every unclaimed difference flagged. |
+- [Technical reference](docs/reference.md) covers configuration, runtime boundaries, receipts, and adding a harness.
+- [Provider dispatch](plugins/pstack/skills/poteto-mode/references/provider-dispatch.md) owns model choices and lane execution.
+- [Harness tools](plugins/pstack/skills/poteto-mode/references/codex-tools.md) maps shared workflows to each app's tools.
+- [Upstream contract](UPSTREAM.md) records source pins, local ownership, and sync rules.
+- [Live gate](docs/LIVE-GATE.md) defines installed verification before merge or release.
+- [psf-monitor](https://github.com/thisguymartin/psf-monitor) is a separate optional plugin for watching external lanes.
 
-Plugin skills include `pstack:` in their name. In Claude Code, invoke a native skill such as `/pstack:architect`. In Codex, ask for the skill, such as `Use pstack:architect for this design.` See the [technical reference](docs/reference.md) for the full list.
+## Contribute
 
-## Cost
+Track durable work in this repository's [GitHub Issues](https://github.com/thisguymartin/pstack-flex/issues). Read [UPSTREAM.md](UPSTREAM.md) before editing upstream-derived content. Keep one shared skill tree, with tool translation and provider routing at their existing boundaries.
 
-Some workflows use one model. `architect`, `arena`, and `interrogate` run several in parallel. Subscription lanes spend that CLI's plan; gateway lanes bill per token on the lab's account. The cost playbook in [docs/USAGE.md](docs/USAGE.md#cost-playbook) shows where the gateway lanes pay off: high-volume code-writing roles on DeepSeek Flash, long-context reading on MiniMax M3, and one frontier lane plus two gateway lanes for a three-provider panel at a fraction of three subscriptions. Keep `judgment and prose` and `hardest tasks` on your strongest lane; they are the last roles to economize. pstack-flex never replaces a failed model with a cheaper one; a lane that fails is reported, not swapped.
+Run `bash scripts/check.sh` before opening a PR. Nothing merges, tags, releases, or rolls out until the exact candidate passes from the real user surface in every affected harness. Record that evidence in the [PR template](.github/pull_request_template.md). A PR without it stays a draft.
 
-## Claude Code and Codex
-
-Both apps read the same pstack skills. Only the way they start those skills and models is different.
-
-| | Claude Code | Codex |
-| --- | --- | --- |
-| Start poteto-mode | Run `/pstack:poteto-mode` or ask for pstack by name. A small startup instruction keeps Claude from starting pstack skills on its own. | Ask for `pstack:poteto-mode` by name. Codex runs the same startup instruction, so pstack skills also wait for a request there. |
-| Runs inside the app | Claude models stay inside Claude Code. | The Codex families stay inside Codex. |
-| Other models | The Codex families and Grok run through their signed-in command-line tools. | Claude and Grok run through their signed-in command-line tools. |
-| Gateway models | DeepSeek, MiniMax, and OpenRouter always run through the external runner with an isolated config directory, never as a native agent. | Same. |
-| Skills and workflows | Shared with Codex. | Shared with Claude Code. |
-
-Grok, DeepSeek, MiniMax, and OpenRouter models can take part in a multi-model review. You cannot use any of them as the main app running pstack.
-
-## Upstream
-
-Lauren's [pstack guide](https://github.com/cursor/plugins/tree/main/pstack/docs/guide) walks through a real task, verification, and longer unattended runs. It uses Cursor's interface, but the ideas are the same. Use the translated skill invocations above in Claude Code or Codex.
-
-This repository tracks two upstreams. [UPSTREAM.md](UPSTREAM.md) records the Cursor pstack commit open-pstack imported (0.15.5 at [`12d587d`](https://github.com/cursor/plugins/commit/12d587dfb20741cafc376c42c696c5f6e2a64487)) and how new pstack releases are brought over. [UPSTREAM-FLEX.md](UPSTREAM-FLEX.md) records the open-pstack fork point (v1.4.1), the last merged release (v1.5.0), which files this fork owns, and the merge procedure. The fork keeps every upstream skill body as-is except the default model descriptors; its own changes are the model matrix, the first-run sheet, the gateway providers in the runner, setup's assignment-first flow, and the docs.
-
-Also kept here: [the original README](README-UPSTREAM.md), unchanged; [the technical reference](docs/reference.md) for every skill and harness detail; [the change record](CHANGES.md); and [the attribution record](NOTICE.md).
-
-## Contributing
-
-Fixes for Claude Code or Codex, new lanes, and help bringing over new pstack releases are welcome. Search this repository's [GitHub Issues](https://github.com/thisguymartin/pstack-flex/issues) before opening a new one. For changes to upstream-derived content, explain why the change belongs here instead of in open-pstack or Lauren's original project.
-
-Read [UPSTREAM.md](UPSTREAM.md) and [UPSTREAM-FLEX.md](UPSTREAM-FLEX.md) before changing content brought over from either upstream. Pull requests must keep one shared skill tree for Claude Code and Codex and pass the repository's tests, type checks, plugin validation, and static checks. Nothing merges until the exact candidate is installed and the changed behavior passes a live test from the real user surface in every affected harness; the [pull request template](.github/pull_request_template.md) records that evidence, and a PR without it stays a draft. Run `bash scripts/check.sh` for the local checks and follow [docs/LIVE-GATE.md](docs/LIVE-GATE.md) for the live test. Adding a gateway provider has its own checklist in [docs/LANES.md](docs/LANES.md#adding-a-gateway-provider).
-
-## License
-
-MIT. pstack was created by Lauren Tan. open-pstack builds on Michael Denyer's [pstack-claude](https://github.com/michael-denyer/pstack-claude) port and includes attributed MIT-licensed work from Cursor Team Kit and Superpowers. pstack-flex started as a fork of open-pstack and is maintained as its own distribution. See [NOTICE.md](NOTICE.md) and the preserved license files for details.
+MIT. pstack was created by Lauren Tan. The distribution also includes work from pstack-claude, Cursor Team Kit, and Superpowers. [NOTICE.md](NOTICE.md) records attribution; [CHANGES.md](CHANGES.md) records the fork's current changes.

@@ -121,6 +121,68 @@ function parseGrok(stdout: string, requestedModel: string): ParsedOutput {
   };
 }
 
+// pstack-flex: `opencode run --format json` prints one event per line. The last
+// `text` event is the answer; each `step_finish` carries that step's tokens.
+// No event names the model that answered, and its cost is a catalog estimate.
+function parseOpenCode(stdout: string): ParsedOutput {
+  let text: string | null = null;
+  let sessionId: string | null = null;
+  let steps = 0;
+  const totals = { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 };
+
+  for (const line of stdout.split("\n")) {
+    if (line.trim().length === 0) continue;
+    let raw: unknown;
+    try {
+      raw = JSON.parse(line);
+    } catch {
+      throw new Error("opencode emitted a non-JSON event");
+    }
+    const event = object(raw);
+    if (event === null) continue;
+    sessionId = nullableString(event.sessionID) ?? sessionId;
+    const part = object(event.part);
+    if (event.type === "text") {
+      text = nullableString(part?.text) ?? text;
+    }
+    if (event.type === "step_finish") {
+      const tokens = object(part?.tokens);
+      const cache = object(tokens?.cache);
+      steps += 1;
+      totals.input += finiteNumber(tokens?.input) ?? 0;
+      totals.output += finiteNumber(tokens?.output) ?? 0;
+      totals.reasoning += finiteNumber(tokens?.reasoning) ?? 0;
+      totals.cacheRead += finiteNumber(cache?.read) ?? 0;
+      totals.cacheWrite += finiteNumber(cache?.write) ?? 0;
+    }
+    if (event.type === "error") {
+      const error = object(event.error);
+      throw new Error(
+        nullableString(object(error?.data)?.message) ??
+          nullableString(error?.name) ??
+          "opencode reported an error"
+      );
+    }
+  }
+
+  if (text === null) throw new Error("opencode result did not contain final text");
+  return {
+    text,
+    reportedModel: null,
+    sessionId,
+    usage: steps === 0
+      ? null
+      : {
+          inputTokens: totals.input,
+          cachedInputTokens: totals.cacheRead,
+          cacheCreationInputTokens: totals.cacheWrite,
+          outputTokens: totals.output,
+          reasoningTokens: totals.reasoning,
+        },
+    costUsd: null,
+  };
+}
+
 function parseCodex(stdout: string): ParsedOutput {
   let text: string | null = null;
   let usage: NormalizedUsage | null = null;
@@ -184,7 +246,14 @@ export function parseProviderOutput(
       return parseCodex(stdout);
     case "grok":
       return parseGrok(stdout, requestedModel);
+    case "opencode":
+      return parseOpenCode(stdout);
   }
+}
+
+// These CLIs omit a trustworthy model report; their receipts retain pinned argv.
+export function acceptsUnreportedModel(provider: Provider): boolean {
+  return provider === "codex" || provider === "opencode" || isGatewayProvider(provider);
 }
 
 export function reportedModelMatches(

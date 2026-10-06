@@ -1,22 +1,12 @@
 import { randomBytes } from "node:crypto";
-import { closeSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync, writeSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { harnessAdapter } from "../harnesses.ts";
 import type { AccessMode, Effort, Parent, Provider, RunnerOptions, RunnerReceipt } from "./types.ts";
-
-// pstack-flex addition. An opt-in journal of each external lane, so the agent
-// monitor can show a lane while it runs. Journaling is on only when the lanes
-// directory exists; psf-monitor's `journal on` creates it. A journal failure
-// never changes the lane's receipt, exit code, or output.
 
 export const LANES_DIR_VAR = "PSTACK_FLEX_LANES_DIR";
 const PROMPT_HEAD_CHARS = 300;
-
-// The parent harness's own session id, inherited by the runner from the tool that launched it.
-const PARENT_SESSION_VAR: Record<Parent, string> = {
-  claude: "CLAUDE_CODE_SESSION_ID",
-  codex: "CODEX_THREAD_ID",
-};
 
 export interface LaneRecord {
   readonly schemaVersion: 1;
@@ -73,13 +63,15 @@ export function openLaneJournal(
   started: number,
   env: NodeJS.ProcessEnv = process.env
 ): LaneTap {
+  const root = lanesRoot(env);
+  if (!existsSync(root)) return OFF;
   const laneId = `${started.toString(36)}-${process.pid.toString(36)}-${randomBytes(3).toString("hex")}`;
-  const dir = join(lanesRoot(env), laneId);
+  const dir = join(root, laneId);
   let descriptor: number | null = null;
   try {
-    // Not recursive: a missing lanes directory means journaling is off.
     mkdirSync(dir, { mode: 0o700 });
-    const session = env[PARENT_SESSION_VAR[options.parent]];
+    const sessionVar = harnessAdapter(options.parent).sessionVariable;
+    const session = sessionVar === null ? undefined : env[sessionVar];
     const record: LaneRecord = {
       schemaVersion: 1,
       laneId,
@@ -111,7 +103,6 @@ export function openLaneJournal(
     try {
       closeSync(open);
     } catch {
-      // Already closed; nothing to recover.
     }
     open = null;
   };
@@ -122,7 +113,6 @@ export function openLaneJournal(
         let written = 0;
         while (written < chunk.length) written += writeSync(open, chunk, written);
       } catch {
-        // A full disk or revoked directory stops the journal, never the lane.
         close();
       }
     },
@@ -131,7 +121,6 @@ export function openLaneJournal(
       try {
         writeAtomic(join(dir, "receipt.json"), receipt);
       } catch {
-        // The canonical receipt is already written; the journal copy is a convenience.
       }
     },
   };

@@ -164,11 +164,45 @@ describe("invocationCommand", () => {
 
   it("preflights gateway lanes with a version probe, not an auth check", () => {
     for (const provider of ["deepseek", "minimax", "openrouter"] as const) {
-      const spec = preflightCommand(provider);
+      const spec = preflightCommand(provider, "model");
       expect(spec.command).toBe("claude");
       expect(spec.args).toEqual(["--version"]);
       expect(spec.stdin).toBe("none");
     }
+  });
+
+  it("runs an opencode lane headless with the effort as its variant", () => {
+    const model = "openrouter/z-ai/glm-5.3";
+    const readOnly = invocationCommand(options({ provider: "opencode", model, effort: "high" }));
+    const writer = invocationCommand(
+      options({ provider: "opencode", model, effort: "max", mode: "isolated-write" })
+    );
+    expect(readOnly).toEqual({
+      command: "opencode",
+      args: [
+        "run",
+        "--model", model,
+        "--variant", "high",
+        "--agent", expect.stringMatching(/^pstack-lane-/),
+        "--format", "json",
+        "--dir", options().cwd,
+        "--pure",
+      ],
+      stdin: "prompt",
+      environment: { OPENCODE_CONFIG_CONTENT: expect.any(String) },
+    });
+    expect(writer.args).toEqual(expect.arrayContaining(["--variant", "max", "--agent", expect.stringMatching(/^pstack-lane-/)]));
+    for (const invocation of [readOnly, writer]) {
+      const agent = invocation.args[invocation.args.indexOf("--agent") + 1];
+      const config = invocation.environment?.OPENCODE_CONFIG_CONTENT;
+      if (config === undefined) throw new Error("OpenCode invocation must carry its agent config");
+      expect(Object.keys(JSON.parse(config).agent)).toEqual([agent]);
+    }
+    expect(preflightCommand("opencode", model)).toEqual({
+      command: "opencode",
+      args: ["models", "openrouter", "--verbose", "--pure"],
+      stdin: "none",
+    });
   });
 
   it("covers low, medium, and high for every external provider", () => {

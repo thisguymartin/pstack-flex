@@ -3,12 +3,12 @@
   "owner": {
     "name": "Martin Patino"
   },
-  "description": "pstack for Claude Code and Codex on the models you choose: subscription CLIs or API-key gateway lanes.",
+  "description": "Shared pstack skills with coding-agent harness adapters and configurable model lanes.",
   "plugins": [
     {
       "name": "pstack",
       "source": "./plugins/pstack",
-      "description": "if you want to go fast, go deep first. pstack helps you write less, but higher quality code. rigorous agent workflows you can parallelize with confidence.",
+      "description": "Shared pstack skills with coding-agent harness adapters and configurable model lanes.",
       "version": "1.5.0",
       "author": {
         "name": "Lauren Tan (original)"

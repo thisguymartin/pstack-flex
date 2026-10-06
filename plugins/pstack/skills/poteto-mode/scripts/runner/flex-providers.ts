@@ -3,11 +3,6 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { GatewayProvider } from "./types.ts";
 
-// pstack-flex addition. Gateway providers run the stock `claude` binary
-// against a third-party Anthropic-compatible endpoint. Everything a lane
-// needs is injected as environment at spawn time; secrets come from the
-// operator's environment and are never written to disk or receipts.
-
 export interface GatewaySpec {
   readonly apiKeyVar: string;
   readonly baseUrlDefault: string;
@@ -124,8 +119,6 @@ export interface GatewayRefusal {
   readonly evidence: string;
 }
 
-// Runs in-process before any subprocess is spawned, so no request can leave
-// the machine first. Refusals surface as `unauthenticated` receipts.
 export function gatewayGuard(
   provider: GatewayProvider,
   source: NodeJS.ProcessEnv = process.env

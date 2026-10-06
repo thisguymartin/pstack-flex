@@ -69,6 +69,36 @@ describe("runner CLI parsing", () => {
     expect(parsed?.model).toBe("moonshotai/kimi-k3");
   });
 
+  it("passes an OpenCode model with its provider through unchanged", () => {
+    const parsed = parseArgs(
+      argv().map((value, index, all) =>
+        all[index - 1] === "--provider"
+          ? "opencode"
+          : all[index - 1] === "--model"
+            ? "openrouter/z-ai/glm-5.3"
+            : value
+      )
+    );
+    expect(parsed?.provider).toBe("opencode");
+    expect(parsed?.model).toBe("openrouter/z-ai/glm-5.3");
+  });
+
+  it("accepts OpenCode as a parent", () => {
+    const parsed = parseArgs(
+      argv().map((value, index, all) =>
+        all[index - 1] === "--parent" ? "opencode" : value
+      )
+    );
+    expect(parsed?.parent).toBe("opencode");
+    expect(() =>
+      parseArgs(
+        argv().map((value, index, all) =>
+          all[index - 1] === "--parent" ? "cursor" : value
+        )
+      )
+    ).toThrow("claude, codex, opencode");
+  });
+
   it("takes an optional display label and nothing else from it", () => {
     expect(parseArgs(argv())?.label).toBeUndefined();
     expect(parseArgs(argv(["--label", "  arena cross-judge  "]))?.label).toBe("arena cross-judge");

@@ -43,18 +43,9 @@ This line is the single source for the architect default. `setup-pstack`'s first
 
 ## Sheet scope
 
-pstack-flex addition. A model sheet is either global or project-scoped.
+A model sheet is either global or project-scoped. Run the installed `scripts/pstack-context --parent <harness id> --cwd <project>` once before the first configured dispatch. It returns paths and normalized descriptors using the shared [configuration parser](../scripts/configuration.ts) and [harness table](../scripts/harnesses.ts).
 
-| Parent | Global sheet | Project sheet |
-|---|---|---|
-| Claude Code | `~/.claude/pstack-models.md` | `<project root>/.claude/pstack-models.md` |
-| Codex | `~/.codex/pstack-models.md` | `<project root>/.codex/pstack-models.md` |
-
-The project root is the top level of the repository's primary checkout, so every worktree of one repository shares one project sheet. Read it as the parent directory of `git rev-parse --path-format=absolute --git-common-dir`. Outside a git repository there is no project sheet.
-
-Before the first configured role launches in a run, the parent reads its project sheet path once. If the file exists, it is the model sheet for the whole run and replaces the global sheet, including a global sheet already loaded into context. If the file does not exist, the global sheet applies. Never merge the two role by role: every sheet carries every documented role, so one sheet always answers. Say which sheet is in use when reporting a panel.
-
-A project sheet is private to the machine. `setup-pstack` writes it, lists it in `.git/info/exclude`, and never commits it. Deleting the file returns the project to the global sheet.
+An existing project sheet replaces the global sheet for the entire run. Never merge the two role by role. Worktrees share the primary checkout's project sheet; outside git only global scope exists. Setup keeps a project sheet private through the common git directory's `info/exclude`. Deleting it restores global scope. Report the selected sheet with the panel.
 
 ## Flex model matrix
 
@@ -74,11 +65,25 @@ The `openrouter` row is open. Its Model cell stands for any model ID in OpenRout
 
 MiniMax preview requires Token Plan access; set `MINIMAX_API_KEY` to the eligible subscription key. A pay-as-you-go key is not proof of preview access. The preview always thinks and supports `low` through `max`; do not disable thinking. M3 thinking is off by default at the API and requires adaptive thinking to enable it; its effort flag does not imply preview-style depth control. Selectable efforts are runner requests, not a claim that every provider applies five distinct reasoning levels. Verify CLI forwarding and model access with live probes. Sources: [MiniMax models](https://platform.minimax.io/docs/guides/models-intro), [MiniMax thinking controls](https://platform.minimax.io/docs/api-reference/text-anthropic-api), [DeepSeek Anthropic compatibility](https://api-docs.deepseek.com/guides/anthropic_api) (checked 2026-09-27).
 
-Flex lanes have no Claude-native agent stem and always take the external runner in both parents. The base URL is a documented default; override it with `DEEPSEEK_BASE_URL`, `MINIMAX_BASE_URL`, or `OPENROUTER_BASE_URL` (OpenRouter's must end in `/api`, not `/api/v1`), and confirm it against the provider's current Claude Code guide during setup's live probe. The config dir defaults to `~/.pstack-flex/<provider>` (override: `PSTACK_FLEX_<PROVIDER>_CONFIG_DIR`). Secrets stay in the environment: nothing in the sheet, the receipts, or this repository carries a key.
+Flex lanes have no Claude-native agent stem and always take the external runner under every harness. The base URL is a documented default; override it with `DEEPSEEK_BASE_URL`, `MINIMAX_BASE_URL`, or `OPENROUTER_BASE_URL` (OpenRouter's must end in `/api`, not `/api/v1`), and confirm it against the provider's current Claude Code guide during setup's live probe. The config dir defaults to `~/.pstack-flex/<provider>` (override: `PSTACK_FLEX_<PROVIDER>_CONFIG_DIR`). Secrets stay in the environment: nothing in the sheet, the receipts, or this repository carries a key.
 
-Gateway receipt semantics differ from stock claude lanes in two documented ways. `costUsd` is always `null`: the claude CLI prices `total_cost_usd` at Anthropic rates, which would be fiction for third-party traffic; real prices live in [LANES.md](../../../../../docs/LANES.md), and token usage in the receipt stays accurate. Model verification accepts a case-insensitive matching provider report. An OpenRouter report must otherwise match exactly: any catalog model can be requested, so a prefix rule would accept a sibling such as `z-ai/glm-5.3-air` for `z-ai/glm-5.3`. A mismatched report fails the lane. When the endpoint reports no model, the receipt uses `modelEvidence: "pinned-argv"` and `modelVerified: false`.
+Gateway receipt semantics differ from stock claude lanes in two documented ways. `costUsd` is always `null`: the claude CLI prices `total_cost_usd` at Anthropic rates, which would be fiction for third-party traffic; billing comes from the provider, and token usage in the receipt stays accurate. Model verification accepts a case-insensitive matching provider report. An OpenRouter report must otherwise match exactly: any catalog model can be requested, so a prefix rule would accept a sibling such as `z-ai/glm-5.3-air` for `z-ai/glm-5.3`. A mismatched report fails the lane. When the endpoint reports no model, the receipt uses `modelEvidence: "pinned-argv"` and `modelVerified: false`.
 
 Panel diversity rule (pstack-flex): `arena runners` and `interrogate reviewers` must span at least two distinct providers. DeepSeek plus MiniMax satisfies it. For this rule a lane's provider is the lab that made the model, not the route that reaches it. An `openrouter` lane counts as its model ID's namespace, and the namespaces `anthropic`, `openai`, `x-ai`, `deepseek`, and `minimax` count as the `claude`, `codex`, `grok`, `deepseek`, and `minimax` providers. So `openrouter:deepseek/deepseek-v4-pro` plus `deepseek:deepseek-flash` is one provider, and `openrouter:google/gemini-3.8-flash` plus `openrouter:z-ai/glm-5.3` is two. A single-provider panel is written only after the operator explicitly confirms the reduced diversity during setup, and the setup report records that confirmation. The adversarial signal comes from model diversity, so treat the override as an exception, not a configuration style.
+
+## OpenCode lanes
+
+pstack-flex addition, beta: verified at the runner level, not yet from a real session. An `opencode` lane runs `opencode run` headless on any model OpenCode can reach, with OpenCode's own credentials: a provider login (`opencode providers login`) or the provider's key variable, such as `OPENROUTER_API_KEY`. It needs neither the `claude` nor the `codex` CLI, so an OpenRouter key and OpenCode are enough for a multi-model panel.
+
+| Family | Provider | Model | Default effort | Selectable efforts | Credentials |
+|---|---|---|---|---|---|
+| opencode | opencode | <any OpenCode model ID> | high | low medium high xhigh max | OpenCode's own |
+
+The row is open. Its Model cell stands for any ID that `opencode models` lists, written as OpenCode's `<provider>/<model>`, such as `opencode:openrouter/z-ai/glm-5.3@high`. Split a descriptor at the first `:` and the last `@`. Each distinct model ID is its own family with its own requested effort and probe, and setup's live probe is the gate. The effort becomes OpenCode's `--variant`, and each model offers its own variants (`opencode models <provider> --verbose`). OpenCode silently ignores a variant the model does not offer, so the launcher's preflight refuses that effort as `unavailable-model` and names the offered ones. A model that offers no variants cannot take a pstack effort and cannot run as a lane. An `opencode` lane routes through the launcher under every parent, OpenCode's included, because OpenCode's native `task` subagent cannot choose a model.
+
+The lane runs with `--pure`, Claude Code compatibility off, and a private in-memory OpenCode database (`OPENCODE_DB=:memory:`). OpenCode 1.18.31 can lock a shared database during parallel startup. Each invocation uses a fresh agent name with its own deny-first permissions; named `plan` and `build` agents would deep-merge ambient permissions. Read-only lanes can read, list, glob, and grep. Writers can also edit files inside their worktree. Subagents, skills, web access, MCP tools, and shell commands are denied. OpenCode has no shell sandbox, and even Git reads can execute external helpers, so these lanes cannot run Git commands, tests, or builds. Report such requirements as unsupported. Receipts use `modelEvidence: "pinned-argv"` because OpenCode's JSON does not name the answering model, and `costUsd: null` because its cost is a catalog estimate.
+
+For panel diversity, an `opencode` lane counts as the lab that made its model. For `openrouter/<lab>/<model>` the lab is the namespace, with the same equivalences as OpenRouter lanes. For another OpenCode provider, verify the model's maker before counting it. For example, `opencode/glm-5.3` is from `z-ai`, but the aggregator name alone does not prove that. A context with `lab: null` contributes no additional lab until verified.
 
 ## Read-time normalization
 
@@ -92,23 +97,13 @@ This read-time rule makes an older installed sheet use the latest family revisio
 
 The top-level harness resolves the route once. A child receives an assigned provider, model, effort, access mode, prompt, working directory, and output path. A child never detects the harness, chooses a provider, or launches another model. Environment markers may corroborate the top-level harness before fan-out, but nested processes inherit parent markers and must not use them for routing.
 
-| Parent | `claude:*` | `codex:*` | `grok:*` | `deepseek:*` | `minimax:*` | `openrouter:*` |
-|---|---|---|---|---|---|---|
-| Claude Code | native `Agent` | external runner | external runner | external runner | external runner | external runner |
-| Codex | external runner | native `spawn_agent` | external runner | external runner | external runner | external runner |
+The harness table declares `nativeProvider`. A qualified descriptor takes the native route only when its execution provider matches that field. All other descriptors take the external runner. An adapter with no native provider uses external execution for every qualified descriptor. The runner validates an already-selected external route; it does not detect or choose the parent.
 
-Flex gateway descriptors are never native, even under a Claude Code parent: the gateway lane must run in its own process with injected endpoint, token, and isolated config dir, which the parent's native `Agent` primitive cannot provide.
-
-`inherit-parent` and `auto` remain aliases. They use the parent's current model and effort through its native subagent primitive. In a panel they still consume one lane, but they reduce provider diversity; say so in the synthesis record.
+`inherit-parent` and `auto` use the parent's current model and effort through its native subagent primitive. They still count as a lane and reduce model diversity. Read [harness integration](codex-tools.md) for the selected adapter's tools, native invocation, configuration wiring, and retained launch handles. Gateway lanes stay external because native agents cannot receive their isolated endpoint and credentials.
 
 ## Native lanes
 
-Native dispatch avoids a second CLI startup and its base context.
-
-- Claude Code: match the descriptor's `(provider, model)` to one model-matrix row, then dispatch it through `pstack-<stem>-<effort>` using that row's Claude-native agent stem and the descriptor's effort. Those definitions select the rolling model alias, requested effort, and `background: true`. `pstack-fable-max` and `pstack-opus-xhigh` remain in that set. Pass the complete task, grounding paths, access mode, and unique output location in the `Agent` prompt. Retain the task handle and drain it only after fan-out.
-- Codex: call `spawn_agent` with the descriptor's model and `reasoning_effort`, the complete task, grounding paths, access mode, and unique output location. Use an isolated worktree for a writer. Codex subagents already run concurrently.
-
-Do not send a same-provider descriptor to the external runner. It rejects that call because the native route is cheaper and already available.
+Use the adapter's native dispatch recipe with the requested model, effort, access mode, full task, grounding paths, and unique output location. The model matrix's native agent stem supplies agent definitions where required. Never send a native descriptor to the external runner, and never reinterpret an external descriptor as a native model slug.
 
 ## External lanes
 
@@ -116,8 +111,8 @@ The launcher lives at `skills/poteto-mode/scripts/runner/pstack-runner` under th
 
 ```text
 pstack-runner \
-  --parent <claude|codex> \
-  --provider <claude|codex|grok|deepseek|minimax|openrouter> \
+  --parent <harness id> \
+  --provider <execution provider> \
   --model <real CLI model> \
   --effort <low|medium|high|xhigh|max> \
   --mode <read-only|isolated-write> \
@@ -138,10 +133,7 @@ Grok authentication preflight has one bounded retry. If the first `grok models` 
 
 The parent tool sandbox still governs whether a subscribed child CLI can reach its credentials and network. Run setup's live probe from the actual parent profile. A blocked external CLI is a loud dropout, not a reason to elevate permissions or substitute a model silently.
 
-The parent invocation must itself be resumable background work:
-
-- Claude Code: call the launcher through a Bash tool invocation with `run_in_background: true` and retain its task ID. A foreground Bash tool call has an automatic ten-minute ceiling even when the runner's own timeout is longer. Shelling out with `&` and losing the task handle is not equivalent.
-- Codex: run the launcher in a persistent exec session that returns a session ID, then wait or poll that handle. Do not hold one foreground tool call open for the model's full runtime.
+Use the selected adapter's retained background launch recipe in [harness integration](codex-tools.md). Foreground tool limits belong to that adapter; they never become a lane timeout.
 
 Start the background process, continue launching the other lanes, then drain their handles. Native and external lanes belong in the same fan-out phase.
 
@@ -157,7 +149,7 @@ Success requires all of these:
 
 1. Exit status `0`.
 2. Receipt status `complete`.
-3. Either `modelVerified: true` with `modelEvidence: "provider-report"`, or a Codex receipt with `reportedModel: null`, `modelVerified: false`, and `modelEvidence: "pinned-argv"`, or a gateway (`deepseek`/`minimax`/`openrouter`) receipt with `modelVerified: false` and `modelEvidence: "pinned-argv"` when the endpoint does not echo the requested slug. For Claude's `fable` and `opus` aliases, the concrete provider report must belong to the requested family. Codex 0.149.0 accepts the exact `--model` argument but does not report the served model in its JSONL stream. Gateway reports match case-insensitively because third-party endpoints are inconsistent about slug casing; an OpenRouter report must otherwise match the requested ID exactly.
+3. Either `modelVerified: true` with `modelEvidence: "provider-report"`, or a Codex receipt with `reportedModel: null`, `modelVerified: false`, and `modelEvidence: "pinned-argv"`, or a gateway (`deepseek`/`minimax`/`openrouter`) receipt with `modelVerified: false` and `modelEvidence: "pinned-argv"` when the endpoint does not echo the requested slug, or an `opencode` receipt with `reportedModel: null`, `modelVerified: false`, and `modelEvidence: "pinned-argv"`. For Claude's `fable` and `opus` aliases, the concrete provider report must belong to the requested family. Codex 0.149.0 accepts the exact `--model` argument but does not report the served model in its JSONL stream. Gateway reports match case-insensitively because third-party endpoints are inconsistent about slug casing; an OpenRouter report must otherwise match the requested ID exactly.
 4. A non-empty output file.
 
 The receipt also carries elapsed time, token usage when the CLI exposes it, and cost when available. Keep it with the arena or review artifacts so parent-harness comparisons are evidence-based.

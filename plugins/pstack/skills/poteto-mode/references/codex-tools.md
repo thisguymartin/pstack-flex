@@ -1,64 +1,66 @@
-# Codex tool mapping for pstack
+# Harness integration
 
-pstack skills retain Claude Code tool language (`Skill`, `Agent`, `AskUserQuestion`) in shared prose. On Codex the files are the same; only those tool names resolve differently. Model execution is not translated here. Read [`provider-dispatch.md`](provider-dispatch.md) for the parent-owned Claude/Codex/Grok route table and provider-qualified descriptors.
+Shared skills retain upstream tool names. This file is the harness adapter boundary; its path remains stable for upstream skill references. Model providers are separate. Read [provider dispatch](provider-dispatch.md) for models and receipts.
 
-## Tool actions
+The parent matches the current session and tools to the exact `id` in [harnesses.ts](../scripts/harnesses.ts) once. Do not infer it inside children. Run `scripts/pstack-context --parent <id> --cwd <project>` under the installed poteto-mode skill before the first configured dispatch. It reads the selected model sheet. Keep that context for the run. It never spawns a lane or writes configuration.
 
-| pstack / Claude action | Codex equivalent |
-|------------------------|------------------|
-| Read a file | `shell` (`cat`, `head`, `tail`) |
-| Create / edit / delete a file | `apply_patch` |
-| Run a shell command | `shell` |
-| Search file contents / find files | `shell` (`rg`, `grep`, `find`, `ls`) |
-| Fetch a URL | `shell` with `curl` / `wget` |
-| Search the web | `web_search` |
-| Invoke a skill (the `Skill` tool, `/command`) | Skills load natively. Follow the instructions presented. |
-| `paths` frontmatter scopes automatic loading | Claude Code only. On Codex, invoke `pstack:typescript-best-practices` by name. |
-| Dispatch a subagent (the `Agent`/`Task` tool) | `spawn_agent` |
-| Dispatch N parallel subagents in one turn | N `spawn_agent` calls in one response |
-| Wait for a subagent result | `wait_agent` |
-| Free a finished subagent slot | `close_agent` |
-| Track tasks (the todolist / `TodoWrite`) | `update_plan` |
-| Ask the human a fixed-choice question (`AskUserQuestion`) | Ask in plain text and let the user answer. Codex has no structured-choice tool. |
+The output includes global/project paths, integration targets, the selected sheet, normalized role descriptors, routes, model labs, and lane capabilities. Report stale `normalizedFrom` values once; setup persists them only after probes and confirmation. Model-family validation uses provider dispatch's matrices. For a task that requires shell execution, add `--role '<role>' --require-shell`; a lane lacking that capability fails explicitly. An inherited lane uses the actual session's available tools.
 
-Subagent dispatch needs `multi_agent` enabled. Add to `~/.codex/config.toml`:
+When a role has no configured row, use the calling skill's defaults with the same routing and capability rules. `--role` checks only persisted assignments.
 
-```toml
-[features]
-multi_agent = true
-```
+`lab: null` means the descriptor does not establish a lab. OpenCode aggregators can serve several labs; verify the model's maker before counting panel diversity. Never count an unknown aggregator as an additional lab.
 
-Without it, the native Codex lane is a named dropout. Independent external lanes still run, and the parent records the reduced provider count. Never collapse a panel into a sequential single-model pass.
+## Tools
 
-## Subagent policy
+| Shared action | Claude Code | Codex | OpenCode |
+| --- | --- | --- | --- |
+| Read | `Read` | file or shell tool | `read` |
+| Write/edit | `Write`, `Edit` | `apply_patch` | `write`, `edit` |
+| Shell | `Bash` | persistent exec session | `bash` |
+| Search files | `Grep`, `Glob` | `rg` | `grep`, `glob` |
+| Fetch/search web | `WebFetch`, `WebSearch` | available web tools | `webfetch`, `websearch` |
+| Load skill | `Skill`, `/pstack:<name>` | load `pstack:<name>` | `skill` with `<name>` |
+| Subagent | `Agent` | `spawn_agent` | `task` with `general` |
+| Wait | retained task handle | `wait_agent` | task response |
+| Tasks | `TodoWrite` | available plan tool | `todowrite` |
+| Ask user | `AskUserQuestion` | available question tool or plain text | `question` |
 
-poteto-mode's Subagents section sets Claude-specific defaults (`subagent_type: "poteto-agent"`, `run_in_background: true`). On Codex:
+`paths` frontmatter is a Claude loading feature. Elsewhere invoke the named skill explicitly. An unavailable native subagent is a named dropout; never replace it with an external or weaker model silently.
 
-- There is no `poteto-agent` subagent type. Route an ad-hoc subagent through poteto-mode's style by dispatching a `spawn_agent` whose instructions tell it to read the `poteto-mode` skill in full first.
-- `spawn_agent` calls already run concurrently with your turn, so `run_in_background: true` has no separate flag. Issue the dispatch and continue.
-- There is no `comment-sicko` subagent type either. The **no-comments** skill spawns it on Claude Code; on Codex dispatch a `spawn_agent` whose instructions tell it to read `agents/comment-sicko.md` in full first.
-- Claude Code runs every subagent on this machine, so the **swarm** skill's workers and the fan-out playbooks (`orchestrate`, `autopilot-full`, `autopilot-stack`) isolate writers with worktrees. The same holds on Codex.
-- Keep the rest of the policy unchanged. Pass file pointers not inlined context, give each worker its own worktree or branch when they write, review every subagent's diff yourself.
+## Native dispatch
 
-## Models and providers
+Use the route returned for the configured descriptor. `inherit-parent` and `auto` always request the session's current model and effort. An explicit model is native only when its provider matches the adapter's `nativeProvider`.
 
-Do not replace every configured entry with a Codex model. `/setup-pstack` writes portable descriptors such as `claude:fable@max`, `codex:gpt-5.6-sol@max`, and `grok:grok-4.7@xhigh`. In a Codex parent, only `codex:*` is native. Route Claude and Grok descriptors through the external launcher exactly as `provider-dispatch.md` specifies. The current default panel runs four lanes across three providers (Fable and Opus are both Claude) and contains no older GPT or Claude substitute. pstack-flex gateway descriptors (`deepseek:*`, `minimax:*`, `openrouter:*`) also always route through the external launcher in a Codex parent; they are never `spawn_agent` lanes.
+- Claude Code uses `Agent`. Match the descriptor's `(provider, model)` to the matrix's native agent stem, then use `pstack-<stem>-<effort>`. Those definitions set the rolling model alias, effort, and background execution. Ad-hoc inherited work uses `poteto-agent`.
+- Codex uses `spawn_agent` with the selected `model` and `reasoning_effort`. Enable `multi_agent` in the Codex feature configuration. There is no `poteto-agent` type; inherited helpers read poteto-mode, and comment reviewers read `agents/comment-sicko.md`. Spawn calls already run concurrently.
+- OpenCode's `task` cannot select a model per call. It serves only inherited roles. Its qualified model descriptors use the external runner, even when their provider is `opencode`. A `general` task reads the relevant agent instruction file.
 
-## Claude built-in skills pstack references
+Pass the full task, access mode, grounding paths, and unique output location. Give writers dedicated worktrees. Launch independent lanes together, retain handles, then drain every lane before judging.
 
-Some triggers name skills that ship with Claude Code, not pstack. They do not exist on Codex. Substitute the behavior:
+## External launch
 
-| Claude built-in named in pstack | On Codex |
-|---------------------------------|----------|
-| `run` (drive a CLI/TUI to see a change work) | Run the app yourself via `shell` and observe the real output. |
-| `verify` (drive a UI to confirm a fix) | Drive the UI with whatever automation you have, or hand the user a concrete manual check. Do not claim done without observing the artifact. |
-| `plugin-dev:skill-development` (Claude's SKILL.md authoring guidance) | Follow your platform's skill-authoring guidance; the `writing-skills` skill if present. Keep `name` + `description` frontmatter and progressive disclosure. |
-| `loop` (recurring/self-paced re-invocation, used by `babysit`) | Codex has no `loop` skill. Re-run the step yourself on a cadence, or use a Codex scheduled task if available. |
+Use the adapter's `launch` recipe. The runner's own timeout is absent unless the user or task supplies a deadline.
 
-## Vendored scripts
+- `task` uses Claude's Bash tool with `run_in_background: true`. Retain its task ID. A foreground call has a ten-minute ceiling.
+- `session` uses Codex's persistent exec session. Retain its session ID and poll that handle.
+- `detached` uses OpenCode's shell. Its foreground calls default to two minutes and have no background handle. Start `nohup pstack-runner … >"<unique log>" 2>&1 & echo $!` and retain the PID. Drain with short receipt checks. `kill -0 <pid>` checks liveness; `kill -TERM <pid>` requests cancellation. Session abort does not reach a detached lane.
 
-`skills/poteto-mode/scripts/` ships the `watch-pr` PR watcher, the `orch` store CLI, `worktree-audit.sh`, and `runner/pstack-runner`. They are plain bun and bash, so they run the same on Codex; invoke them through `shell`. The external runner additionally needs the assigned `claude`, `codex`, or `grok` executable already authenticated. It rejects a Codex provider when Codex is the parent because that lane belongs on native `spawn_agent`. The other scripts need `bun`, `gh`, (for stack work) `gt`, and (for `worktree-audit.sh`) `jq` and `rg`. `worktree-audit.sh` reads Claude Code transcripts under `~/.claude/projects/`; point it at your runtime's transcript directory instead when you run it elsewhere.
+A receipt is terminal only after it contains valid complete JSON. Empty reserved files are still running. Do not judge while another lane is writing.
 
-## Instructions file
+## Configuration integration
 
-Where a pstack skill says "your instructions file", on Codex that is `AGENTS.md` (project root, plus `~/.codex/AGENTS.md` global). On Claude Code it is `CLAUDE.md`.
+Paths and integration type come from `pstack-context`, including `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and `XDG_CONFIG_HOME` overrides. Shared scope resolution is in [configuration.ts](../scripts/configuration.ts). Setup asks which scope to edit every run; dispatch uses the existing project sheet in preference to global, without merging roles.
+
+Project setup writes the sheet and lists its repository-relative path in the common git directory's `info/exclude`. It does not change global instructions. Global setup applies the selected integration recipe:
+
+- `include` adds one `@<absolute sheet path>` line to the target instructions file. Leave unrelated lines alone.
+- `mirror-block` copies the exact sheet bytes between `<!-- pstack:models:begin -->` and `<!-- pstack:models:end -->` in the target instructions file. Replace that block on rerun. If neither marker exists, append one block. Refuse an unmatched, duplicate, or reversed marker.
+- `instructions-array` adds the absolute sheet path once to `instructions` in the first existing integration target. Preserve JSONC comments, unrelated keys, and entries. If no target exists, create the JSON target with `$schema` and that array. Refuse malformed config. Do not create a global `AGENTS.md`, which would shadow OpenCode's Claude-instruction fallback.
+
+Before changing either target, snapshot its bytes. Write only after exact model probes and user confirmation, read back both targets, and restore both on failure. An unchanged rerun leaves bytes unchanged. These recipes are the only harness-specific write rules; setup owns the common transaction.
+
+## Built-ins and local state
+
+Where upstream names `run`, drive the CLI yourself. Where it names `verify`, drive the UI with available tools and observe the artifact. Where it names `plugin-dev:skill-development`, use the current harness's skill-authoring guidance. Where it names `loop`, use an available recurring task or rerun the step at the specified cadence.
+
+Use the current harness's consumed instructions file for standing rules. Transcript paths and native agent stores are host state, not lane-provider configuration. `worktree-audit.sh` reads Claude transcripts; its chat column is unavailable on other hosts. Do not create a Claude transcript directory to compensate.

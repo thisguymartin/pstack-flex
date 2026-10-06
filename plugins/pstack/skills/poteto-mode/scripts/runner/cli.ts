@@ -13,7 +13,7 @@ import {
   UsageError,
 } from "./types.ts";
 
-const HELP = `Usage: pstack-runner --parent <claude|codex> --provider <${PROVIDERS.join("|")}> \\
+const HELP = `Usage: pstack-runner --parent <${PARENTS.join("|")}> --provider <${PROVIDERS.join("|")}> \\
   --model <slug> --effort <level> --mode <read-only|isolated-write> \\
   --prompt <file> --cwd <dir> --output <file> --receipt <file> [--timeout <seconds>] \\
   [--label <name>]
