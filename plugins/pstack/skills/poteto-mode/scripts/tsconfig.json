@@ -7,7 +7,14 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "esnext",
-    "types": ["bun-types"]
+    "types": [
+      "bun-types"
+    ]
   },
-  "include": ["*.ts"]
+  "include": [
+    "harnesses.ts",
+    "configuration*.ts",
+    "context.ts",
+    "runner/*.ts"
+  ]
 }

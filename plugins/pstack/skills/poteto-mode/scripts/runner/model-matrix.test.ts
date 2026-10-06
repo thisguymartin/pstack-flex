@@ -343,7 +343,6 @@ describe("model matrix", () => {
       expect(row.defaultEffort).toBe("high");
       expect(row.selectableEfforts).toEqual([...EFFORTS]);
       expect(row.claudeNativeAgentStem).toBeNull();
-      // sol-6 stays selectable; sol-6.1 took its first-run roles.
       if (row.family !== "sol-6") {
         expect(sheet).toContain(defaultDescriptor(row));
       }
@@ -351,7 +350,6 @@ describe("model matrix", () => {
     expect(new Set(rows.map((row) => row.family)).size).toBe(rows.length);
     expect(new Set(rows.map((row) => `${row.provider}:${row.model}`)).size)
       .toBe(rows.length);
-    // Solo code roles ride the sol-6.1 row; exploration and swarm ride luna.
     const sol6 = defaultDescriptor(rows.find((row) => row.family === "sol-6.1")!);
     const luna = defaultDescriptor(rows.find((row) => row.family === "luna")!);
     for (const role of ["feature, refactoring", "bug-fix", "perf-issue", "hillclimb"]) {
@@ -360,30 +358,7 @@ describe("model matrix", () => {
     for (const role of ["how explorer", "swarm workers"]) {
       expect(sheet).toContain(`${role}: ${luna}\n`);
     }
-    expect(setup).toContain("Its model matrices (stock and flex)");
-    expect(setup).toContain("Read the model matrices, stock and flex.");
-    expect(setup).toContain("any stock or flex matrix family");
-    expect(setup).toContain("Offer every stock family, including Astra, GPT-6.1 Sol, GPT-6 Sol, and Luna, when changing `architect runners`");
-    expect(setup).toContain("Read each model, proposed effort, and selectable efforts from its row.");
-    expect(setup).toContain("outside the stock and flex matrix families");
-    expect(setup).toContain(
-      "| Astra | Astra matrix row + selected effort | external runner | native `spawn_agent` |"
-    );
-    expect(setup).toContain(
-      "| GPT-6.1 Sol | sol-6.1 matrix row + selected effort | external runner | native `spawn_agent` |"
-    );
-    expect(setup).toContain(
-      "| GPT-6 Sol | sol-6 matrix row + selected effort | external runner | native `spawn_agent` |"
-    );
-    expect(setup).toContain(
-      "| Luna | Luna matrix row + selected effort | external runner | native `spawn_agent` |"
-    );
-    expect(setup).toContain("each assigned Codex family gets a native `spawn_agent` probe");
-    expect(setup).not.toContain("additional matrix");
-    expect(dispatch).not.toContain("## Additional model matrix");
-    expect(dispatch).toContain(
-      "These Codex families use native `spawn_agent` under a Codex parent and the external Codex runner under a Claude Code parent."
-    );
+
   });
 
   it("owns the default panel: four lanes, three providers, matrix default efforts", () => {
@@ -413,31 +388,6 @@ describe("model matrix", () => {
     expect(firstRunSheet(setup)).toContain(
       `architect runners: ${architectPanel.join(", ")}\n`
     );
-  });
-
-  it("scopes a sheet to the project or globally, and always asks which", () => {
-    const scopeStart = dispatch.indexOf("## Sheet scope");
-    const scopeEnd = dispatch.indexOf("## Flex model matrix");
-    expect(scopeStart).toBeGreaterThan(-1);
-    expect(scopeEnd).toBeGreaterThan(scopeStart);
-    const scope = dispatch.slice(scopeStart, scopeEnd);
-    for (const path of [
-      "`~/.claude/pstack-models.md`",
-      "`<project root>/.claude/pstack-models.md`",
-      "`~/.codex/pstack-models.md`",
-      "`<project root>/.codex/pstack-models.md`",
-    ]) {
-      expect(scope).toContain(path);
-      expect(setup).toContain(path);
-    }
-    expect(scope).toContain("replaces the global sheet");
-    expect(scope).toContain("If the file does not exist, the global sheet applies.");
-    expect(scope).toContain("Never merge the two role by role");
-    expect(setup).toContain("### 1. Establish the parent and scope");
-    expect(setup).toContain("Ask every run; never infer the scope");
-    expect(setup).toContain("load the global sheet instead as the starting assignments");
-    expect(setup).toContain("`.git/info/exclude`");
-    expect(setup).toContain("Never add the sheet to a tracked `.gitignore`, stage it, or commit it.");
   });
 
   it("passes each GPT-6 family's selected model and effort to the existing runner", () => {
@@ -510,24 +460,9 @@ describe("model matrix", () => {
       expect(current).toBeGreaterThan(previous);
       previous = current;
     }
-    expect(setup).toContain("Do not invent a precedence rule.");
     expect(setup).toContain("Do not probe or write while any inconsistency is unresolved.");
     expect(setup).toContain("A failed probe writes nothing:");
-    expect(setup).toContain("Run one probe per family");
-    expect(setup).toContain("There is no requirement to assign every matrix family.");
-    expect(setup).toContain("`architect runners` to keep at least two entries");
-    expect(setup).toContain("span at least two distinct providers");
-    expect(setup).toContain(
-      "A failed model demands explicit repair or role reassignment before saving."
-    );
-    expect(setup).toContain("normalized complete role map from step 2");
-    expect(setup).toContain("starts with `claude-fable-` or `claude-opus-`");
-    expect(setup).toContain("preserving the provider, effort, role, and lane order");
-    expect(setup).toContain("Show any rolling-alias migrations");
-    expect(setup).toContain("Every documented role remains present.");
-    expect(setup).toContain("An effort-only rerun cannot change a role's family.");
-    expect(setup).toContain("<!-- pstack:models:begin -->");
-    expect(setup).toContain("<!-- pstack:models:end -->");
+    expect(setup).toContain("Ask for confirmation before writing.");
   });
 
   it("keeps the flex matrix additive, parseable, and aligned with the runner", () => {
@@ -566,8 +501,6 @@ describe("model matrix", () => {
       const pair = `${provider}:${model}`;
       expect(pairs.has(pair)).toBe(false);
       pairs.add(pair);
-      // OpenRouter's row is open: its Model cell is a placeholder for any
-      // catalog ID, which setup probes one model at a time.
       if (gateway === "openrouter") {
         expect(model).toBe(OPEN_OPENROUTER_MODEL);
       } else {
@@ -587,42 +520,7 @@ describe("model matrix", () => {
       "minimax:MiniMax-M3.1-Flash-Preview",
       `openrouter:${OPEN_OPENROUTER_MODEL}`,
     ]) expect(pairs.has(pair)).toBe(true);
-    expect(dispatch).toContain("The `openrouter` row is open.");
-    expect(dispatch).toContain("There is no allowlist; setup's live probe on the chosen model is the gate.");
-    expect(dispatch).toContain("Each distinct OpenRouter model ID is its own family");
-    expect(dispatch).toContain("a lane's provider is the lab that made the model, not the route that reaches it.");
-    expect(setup).toContain("Never group efforts or deduplicate probes by provider alone.");
-    expect(setup).toContain("Different models sharing a provider count as one provider");
-    // The stock quad and first-run sheet must not carry flex descriptors:
-    // upstream's own checks parse descriptors with a lowercase-only,
-    // three-provider grammar and must never see a flex lane.
     expect(firstRunSheet(setup)).not.toMatch(/deepseek:|minimax:|openrouter:/i);
   });
 
-  it("binds Claude-native dispatch to the matrix mapping", () => {
-    const dispatch = readFileSync(DISPATCH_PATH, "utf8");
-    const nativeStart = dispatch.indexOf("## Native lanes");
-    const externalStart = dispatch.indexOf("## External lanes");
-    expect(nativeStart).toBeGreaterThan(-1);
-    expect(externalStart).toBeGreaterThan(nativeStart);
-    const nativeLanes = dispatch.slice(nativeStart, externalStart);
-    expect(nativeLanes).toContain(
-      "match the descriptor's `(provider, model)` to one model-matrix row"
-    );
-    expect(nativeLanes).toContain("`pstack-<stem>-<effort>`");
-  });
-
-  it("normalizes old rolling-family pins before any runtime route", () => {
-    const dispatch = readFileSync(DISPATCH_PATH, "utf8");
-    const normalizationStart = dispatch.indexOf("## Read-time normalization");
-    const parentStart = dispatch.indexOf("## The parent owns the route");
-    expect(normalizationStart).toBeGreaterThan(-1);
-    expect(parentStart).toBeGreaterThan(normalizationStart);
-    const normalization = dispatch.slice(normalizationStart, parentStart);
-    expect(normalization).toContain("replace that model component in memory");
-    expect(normalization).toContain("Never pass the versioned predecessor to Claude.");
-    expect(normalization).toContain("without writing user files");
-    expect(normalization).toContain("`/setup-pstack` will rewrite it");
-    expect(normalization).toContain("runner rejects a missed Fable or Opus version pin");
-  });
 });

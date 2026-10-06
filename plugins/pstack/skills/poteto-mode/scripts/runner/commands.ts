@@ -5,14 +5,16 @@ import type {
   RunnerOptions,
 } from "./types.ts";
 import { isGatewayProvider } from "./types.ts";
+import { openCodeLane, openCodeProviderId } from "./opencode-lane.ts";
 
 export interface CommandSpec {
   readonly command: string;
   readonly args: readonly string[];
   readonly stdin: "prompt" | "none";
+  readonly environment?: NodeJS.ProcessEnv;
 }
 
-export function preflightCommand(provider: Provider): CommandSpec {
+export function preflightCommand(provider: Provider, model: string): CommandSpec {
   if (isGatewayProvider(provider)) {
     // Gateway lanes run the claude binary with token auth against a
     // third-party endpoint. `claude auth status` semantics under token
@@ -36,6 +38,12 @@ export function preflightCommand(provider: Provider): CommandSpec {
       };
     case "grok":
       return { command: "grok", args: ["models"], stdin: "none" };
+    case "opencode":
+      return {
+        command: "opencode",
+        args: ["models", openCodeProviderId(model), "--verbose", "--pure"],
+        stdin: "none",
+      };
   }
 }
 
@@ -162,5 +170,28 @@ export function invocationCommand(options: RunnerOptions): CommandSpec {
         ],
         stdin: "none",
       };
+    case "opencode": {
+      const lane = openCodeLane(options.mode);
+      // `--dir` matters: OpenCode takes its root from an inherited PWD otherwise.
+      return {
+        command: "opencode",
+        args: [
+          "run",
+          "--model",
+          options.model,
+          "--variant",
+          options.effort,
+          "--agent",
+          lane.agent,
+          "--format",
+          "json",
+          "--dir",
+          options.cwd,
+          "--pure",
+        ],
+        stdin: "prompt",
+        environment: lane.environment,
+      };
+    }
   }
 }

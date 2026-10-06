@@ -28,7 +28,8 @@ const name = process.argv[1].split("/").at(-1);
 const isPreflight =
   (name === "claude" && (args[0] === "auth" || args[0] === "--version")) ||
   (name === "codex" && args[0] === "login") ||
-  (name === "grok" && args[0] === "models");
+  (name === "grok" && args[0] === "models") ||
+  (name === "opencode" && args[0] === "models");
 const stage = isPreflight ? "preflight" : "model";
 const startedPath = isPreflight
   ? process.env.FAKE_PREFLIGHT_STARTED_PATH
@@ -92,6 +93,22 @@ if (name === "grok" && args[0] === "models") {
   console.log("You are logged in with grok.com.\\nAvailable models:\\n  * grok-4.6 (default)");
   process.exit(0);
 }
+if (name === "opencode" && args[0] === "models") {
+  if (process.env.FAKE_OPENCODE_DB_LOCKED === "1") {
+    console.error("Error: Unexpected error\\n\\ndatabase is locked");
+    process.exit(1);
+  }
+  const listed = {
+    "openrouter/z-ai/glm-5.3": ["low", "high", "max"],
+    "openrouter/z-ai/glm-5.3-air": ["low", "medium", "high", "xhigh", "max"],
+  };
+  for (const [id, variants] of Object.entries(listed)) {
+    if (!id.startsWith(args[1] + "/")) continue;
+    console.log(id);
+    console.log(JSON.stringify({ id, variants: Object.fromEntries(variants.map((v) => [v, {}])) }, null, 2));
+  }
+  process.exit(0);
+}
 const modelIndex = args.findIndex((value) => value === "--model");
 const model = modelIndex >= 0 ? args[modelIndex + 1] : "unknown";
 const reportedModel = process.env.FAKE_REPORT_MODEL ?? (model === "fable"
@@ -99,6 +116,10 @@ const reportedModel = process.env.FAKE_REPORT_MODEL ?? (model === "fable"
   : model === "opus"
     ? "claude-opus-9"
     : model);
+if (name === "opencode" && process.env.FAKE_OPENCODE_ERROR) {
+  console.error(process.env.FAKE_OPENCODE_ERROR);
+  process.exit(1);
+}
 if (stage === "model" && process.env.FAKE_DUMP_ENV_PATH) {
   writeFileSync(process.env.FAKE_DUMP_ENV_PATH, JSON.stringify(process.env));
 }
@@ -137,6 +158,10 @@ if (name === "claude") {
   console.log(JSON.stringify({type:"thread.started",thread_id:"o1"}));
   console.log(JSON.stringify({type:"item.completed",item:{type:"agent_message",text:"CODEX_OK"}}));
   console.log(JSON.stringify({type:"turn.completed",usage:{input_tokens:20,cached_input_tokens:5,output_tokens:3,reasoning_output_tokens:1}}));
+} else if (name === "opencode") {
+  console.log(JSON.stringify({type:"step_start",sessionID:"ses_fake",part:{type:"step-start"}}));
+  console.log(JSON.stringify({type:"text",sessionID:"ses_fake",part:{type:"text",text:"OPENCODE_OK"}}));
+  console.log(JSON.stringify({type:"step_finish",sessionID:"ses_fake",part:{type:"step-finish",cost:0.3,tokens:{input:40,output:5,reasoning:2,cache:{read:8,write:0}}}}));
 } else {
   console.log(JSON.stringify({type:"assistant",message:{content:[{type:"text",text:"progress"}]}}));
   console.log(JSON.stringify({type:"result",subtype:"success",is_error:false,result:"GROK_OK",session_id:"g1",usage:{input_tokens:30,output_tokens:4,total_tokens:34},total_cost_usd:0.02,modelUsage:{[model + "-build"]:{}}}));
@@ -238,7 +263,7 @@ beforeEach(() => {
   bin = join(scratch, "bin");
   mkdirSync(bin);
   writeFileSync(join(scratch, "prompt.md"), "Return the marker.");
-  for (const name of ["claude", "codex", "grok"]) makeExecutable(name);
+  for (const name of ["claude", "codex", "grok", "opencode"]) makeExecutable(name);
   previousPath = process.env.PATH;
   process.env.PATH = `${bin}:${dirname(process.execPath)}:${previousPath ?? ""}`;
   // A lanes directory that does not exist keeps the pstack-flex journal off.
@@ -288,6 +313,7 @@ afterEach(() => {
   delete process.env.FAKE_DESCENDANT_HOLDS_PIPES_MS;
   delete process.env.FAKE_DESCENDANT_PID_PATH;
   delete process.env.FAKE_SELF_SIGNAL;
+  delete process.env.FAKE_OPENCODE_DB_LOCKED;
   rmSync(scratch, { recursive: true, force: true });
 });
 
@@ -313,6 +339,113 @@ describe("runLane", () => {
       }
     });
   }
+
+  for (const provider of ["claude", "codex"] as const) {
+    it(`executes and receipts the ${provider} lane for an OpenCode parent`, async () => {
+      const input = { ...options(provider, `opencode-${provider}`), parent: "opencode" as const };
+      const result = await runLane(input);
+      expect(result.exitCode).toBe(0);
+      expect(receipt(input.receiptPath)).toMatchObject({
+        status: "complete",
+        parent: "opencode",
+        provider,
+        model: input.model,
+      });
+    });
+  }
+
+  function openCodeOptions(
+    parent: RunnerOptions["parent"],
+    overrides: Partial<RunnerOptions> = {}
+  ): RunnerOptions {
+    return {
+      ...options("grok", `opencode-lane-${parent}`),
+      parent,
+      provider: "opencode",
+      model: "openrouter/z-ai/glm-5.3",
+      effort: "high",
+      ...overrides,
+    };
+  }
+
+  for (const parent of ["claude", "codex", "opencode"] as const) {
+    it(`runs an opencode lane under a ${parent} parent with pinned-argv evidence`, async () => {
+      const input = openCodeOptions(parent);
+      const result = await runLane(input);
+      expect(result.exitCode).toBe(0);
+      expect(readFileSync(input.outputPath, "utf8")).toBe("OPENCODE_OK");
+      expect(receipt(input.receiptPath)).toMatchObject({
+        status: "complete",
+        parent,
+        provider: "opencode",
+        model: "openrouter/z-ai/glm-5.3",
+        reportedModel: null,
+        modelVerified: false,
+        modelEvidence: "pinned-argv",
+        sessionId: "ses_fake",
+        usage: { inputTokens: 40, cachedInputTokens: 8, outputTokens: 5, reasoningTokens: 2 },
+        costUsd: null,
+        preflight: {
+          status: "passed",
+          evidence: "model openrouter/z-ai/glm-5.3 listed with a high effort variant",
+        },
+      });
+    });
+  }
+
+  it("refuses an effort the opencode model does not offer before running it", async () => {
+    process.env.FAKE_MODEL_STARTED_PATH = join(scratch, "model-started");
+    const input = openCodeOptions("opencode", { effort: "medium" });
+    const result = await runLane(input);
+    expect(result.exitCode).toBe(69);
+    expect(receipt(input.receiptPath)).toMatchObject({
+      status: "unavailable-model",
+      preflight: {
+        status: "failed",
+        evidence: "OpenCode model openrouter/z-ai/glm-5.3 offers no medium effort variant; it offers low, high, max",
+      },
+    });
+    expect(existsSync(join(scratch, "model-started"))).toBe(false);
+  });
+
+  it("refuses an opencode model OpenCode does not list, even beside a longer sibling", async () => {
+    const input = openCodeOptions("opencode", { model: "openrouter/z-ai/glm-5" });
+    const result = await runLane(input);
+    expect(result.exitCode).toBe(69);
+    expect(receipt(input.receiptPath)).toMatchObject({
+      status: "unavailable-model",
+      preflight: { evidence: "OpenCode lists no model openrouter/z-ai/glm-5 among openrouter's connected models" },
+    });
+  });
+
+  it("reports an opencode preflight crash as a child failure, not a missing model", async () => {
+    process.env.FAKE_OPENCODE_DB_LOCKED = "1";
+    const input = openCodeOptions("opencode");
+    const result = await runLane(input);
+    expect(result.exitCode).toBe(70);
+    expect(receipt(input.receiptPath).status).toBe("child-failed");
+    expect(receipt(input.receiptPath).preflight.evidence).toContain("database is locked");
+  });
+
+  for (const [error, status, exitCode] of [
+    ["ProviderAuthError: credentials rejected", "unauthenticated", 77],
+    ["ModelNotFound: requested model missing", "unavailable-model", 69],
+  ] as const) {
+    it(`classifies an OpenCode ${error.split(":")[0]} without producing output`, async () => {
+      process.env.FAKE_OPENCODE_ERROR = error;
+      const input = openCodeOptions("codex");
+      const result = await runLane(input);
+      expect(result.exitCode).toBe(exitCode);
+      expect(receipt(input.receiptPath).status).toBe(status);
+      expect(existsSync(input.outputPath)).toBe(false);
+    });
+  }
+
+  it("rejects an opencode model without its OpenCode provider", async () => {
+    await expect(runLane(openCodeOptions("claude", { model: "glm-5.3" }))).rejects.toThrow(
+      "must be <provider>/<model>"
+    );
+  });
 
   it("records Codex's exact argv without fabricating a reported model", async () => {
     const input = options("codex");
@@ -702,6 +835,7 @@ describe("runLane", () => {
     const terminated = join(scratch, "preflight-child.terminated");
     const isolatedRunner = join(scratch, "isolated-runner");
     cpSync(import.meta.dir, isolatedRunner, { recursive: true });
+    cpSync(join(import.meta.dir, "../harnesses.ts"), join(scratch, "harnesses.ts"));
     const runner = Bun.spawn([
       process.execPath,
       join(isolatedRunner, "pstack-runner"),
@@ -1316,6 +1450,26 @@ describe("childEnvironment", () => {
     expect(env.PATH).toBe("/bin");
   });
 
+  it("gives an opencode lane its locked config and no parent identity", () => {
+    const env = childEnvironment("opencode", {
+      PATH: "/bin",
+      CLAUDECODE: "1",
+      CODEX_CI: "1",
+      OPENCODE: "1",
+      OPENCODE_PID: "4242",
+      AGENT: "1",
+      OPENCODE_CONFIG_CONTENT: JSON.stringify({ permission: "allow" }),
+      OPENROUTER_API_KEY: "sk-or-test",
+    });
+    expect(env).toEqual({
+      PATH: "/bin",
+      OPENROUTER_API_KEY: "sk-or-test",
+      OPENCODE_DB: ":memory:",
+      OPENCODE_DISABLE_CLAUDE_CODE: "1",
+      OPENCODE_DISABLE_AUTOUPDATE: "1",
+    });
+  });
+
   it("removes only inherited runtime identity needed to avoid nested detection", () => {
     const source = {
       PATH: "/bin",
@@ -1323,6 +1477,9 @@ describe("childEnvironment", () => {
       CODEX_CI: "1",
       CLAUDECODE: "1",
       CLAUDE_CODE_CHILD_SESSION: "1",
+      OPENCODE: "1",
+      OPENCODE_PID: "4242",
+      AGENT: "1",
       KEEP_ME: "yes",
     };
     expect(childEnvironment("claude", source)).toEqual({

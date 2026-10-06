@@ -46,6 +46,21 @@ describe("openLaneJournal", () => {
     expect(heads[1]).toHaveLength(300);
   });
 
+  it("records no parent session for OpenCode, which exposes none", () => {
+    const root = join(scratch, "lanes");
+    mkdirSync(root);
+    openLaneJournal({ ...options, parent: "opencode" }, Date.now(), {
+      [LANES_DIR_VAR]: root,
+      CODEX_THREAD_ID: "unrelated-thread",
+      OPENCODE_PID: "4242",
+    });
+    const [lane] = readdirSync(root);
+    expect(JSON.parse(readFileSync(join(root, lane!, "lane.json"), "utf8"))).toMatchObject({
+      parent: "opencode",
+      parentSessionId: null,
+    });
+  });
+
   it("defaults under the user's pstack-flex directory and honors an override", () => {
     expect(lanesRoot({})).toEndWith(join(".pstack-flex", "lanes"));
     expect(lanesRoot({ [LANES_DIR_VAR]: "/elsewhere" })).toBe("/elsewhere");

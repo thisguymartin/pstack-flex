@@ -1,35 +1,19 @@
 ---
 name: setup-pstack
-description: Configure pstack's provider-qualified models, per-family requested effort, and parent-owned routes per role, in the global sheet or a private project sheet. Verifies native and external Claude, Codex, Grok, DeepSeek, MiniMax, and OpenRouter lanes before writing the override sheet. Use for /setup-pstack, "configure pstack models", "set up pstack models for this project", or changing pstack's model choices.
+description: Configure pstack's provider-qualified models, per-family requested effort, and parent-owned routes per role, in the global sheet or a private project sheet. Verifies native and external lanes before writing the override sheet. Use for /setup-pstack, "configure pstack models", "set up pstack models for this project", or changing pstack's model choices.
 ---
 
 # Setup pstack
 
-Configure one portable model sheet for the current parent harness, in the scope the operator picks: global, or private to one project. Read [`provider-dispatch.md`](../poteto-mode/references/provider-dispatch.md) before probing or writing anything. Its model matrices (stock and flex), descriptor grammar, and route table are the contract. Choose one requested effort per assigned matrix family. Do not add a runtime resolver or a weaker-model fallback. The only configuration files are the global sheet and the optional project sheet that the Sheet scope section of provider dispatch defines.
-
-In global scope, Claude Code writes `~/.claude/pstack-models.md` and loads it from `~/.claude/CLAUDE.md` with:
-
-```text
-@~/.claude/pstack-models.md
-```
-
-In global scope, Codex writes `~/.codex/pstack-models.md`. Codex has no `@` include, so mirror the sheet's exact bytes inside one bounded block in `~/.codex/AGENTS.md` and retain the sheet as the editable source of truth:
-
-```text
-<!-- pstack:models:begin -->
-<exact contents of ~/.codex/pstack-models.md>
-<!-- pstack:models:end -->
-```
-
-In project scope, the sheet is `<project root>/.claude/pstack-models.md` on Claude Code and `<project root>/.codex/pstack-models.md` on Codex. It needs no include and no mirrored block: the parent reads the project path before dispatch, and an existing project sheet replaces the global sheet for that project.
+Configure one portable model sheet for the current parent harness, globally or privately for one project. Read [provider dispatch](../poteto-mode/references/provider-dispatch.md) for model families and [harness integration](../poteto-mode/references/codex-tools.md) for tool and configuration recipes. One family is one `(provider, model)` pair with one requested effort. The model sheet is the only mutable configuration source. No weaker-model fallback.
 
 ## Steps
 
 ### 1. Establish the parent and scope
 
-Use the harness and tool surface running this skill: Claude Code or Codex. Environment markers may corroborate that top-level answer, but do not launch a child and ask it to detect where it came from. Record the parent because the same descriptor takes a different route in each harness.
+Match this session's harness and tools to the exact `id` in the installed [harness table](../poteto-mode/scripts/harnesses.ts), then run `poteto-mode/scripts/pstack-context --parent <id> --cwd <project> --paths-only`. Use the row's identifier rather than an app display name. It returns the adapter, global/project sheet paths, and integration targets without parsing a sheet that setup may need to repair. Resolve once; children never detect or reroute themselves.
 
-Then ask which scope this run configures. Ask every run; never infer the scope from the working directory or from which sheets exist. Before asking, resolve the project root per the Sheet scope section and state both sheet paths and whether each file exists.
+Then ask which scope this run configures. Ask every run; never infer the scope from the working directory or from which sheets exist. Before asking, use the project path returned by the context inspector and state both sheet paths and whether each file exists.
 
 - **Project**: this repository only. The sheet replaces the global sheet for work in this project and stays private to this machine.
 - **Global**: every project that has no project sheet.
@@ -42,17 +26,17 @@ Read the scoped sheet when it exists. In project scope with no project sheet, lo
 
 Treat the normalized values as current role-to-family assignments. Overlay those rows on the complete first-run role map in step 7. Materialize any missing documented role row from that map on the next successful write. A duplicate role row is inconsistent state; report it and resolve it before probing. A row whose role is not in the step 7 role map, such as `how critics`, is from a retired role. Drop it and list it at confirmation. A bare host-native slug from an older sheet is also invalid because it does not say which provider owns it. A versioned Claude model outside the two migration families remains inconsistent state. If no sheet was loaded, use the complete first-run role map and the model matrix's Default effort cells.
 
-Then ask whether to keep these role-to-family assignments or change named roles. Keeping them is the default. Apply only role changes the operator names; never offer a reset of a customized sheet to the first-run assignments. A changed role may use any stock or flex matrix family, any OpenRouter model ID the operator names (`openrouter:<namespace>/<model>`), `inherit-parent`, or `auto`.
+Then ask whether to keep these role-to-family assignments or change named roles. Keeping them is the default. Apply only role changes the operator names; never offer a reset of a customized sheet to the first-run assignments. A changed role may use any stock or flex matrix family, any OpenRouter model ID the operator names (`openrouter:<namespace>/<model>`), any OpenCode model ID the operator names (`opencode:<provider>/<model>`), `inherit-parent`, or `auto`.
 
 List every stock and flex family by name when the operator changes a role, so Claude, Codex, Grok, DeepSeek, MiniMax, and OpenRouter are all on offer and any role can move to any of them. Offer every stock family, including Astra, GPT-6.1 Sol, GPT-6 Sol, and Luna, when changing `architect runners` or another configurable role. Read each model, proposed effort, and selectable efforts from its row. The Codex families are separate families even though they share the Codex provider; changing one family's effort does not change another's. GPT-6.1 Sol uses the `sol-6.1` family and GPT-6 Sol the `sol-6` family; the `sol` family keeps GPT-5.6 Sol for sheets that still assign it.
 
 ### 3. Parse per-family efforts
 
-Read the model matrices, stock and flex. Every non-alias value must match `<provider>:<model>@<effort>`. Map it to exactly one matrix family by `(provider, model)`; an `openrouter` descriptor maps to the open `openrouter` row whatever its model ID. Require its effort to appear in that row's Selectable efforts cell, and collect the effort. `inherit-parent` and `auto` rows carry no family effort.
+Read the model matrices, stock and flex. Every non-alias value must match `<provider>:<model>@<effort>`. Map it to exactly one matrix family by `(provider, model)`; an `openrouter` descriptor maps to the open `openrouter` row whatever its model ID, and an `opencode` descriptor maps to the open `opencode` row the same way. Require its effort to appear in that row's Selectable efforts cell, and collect the effort. `inherit-parent` and `auto` rows carry no family effort.
 
 An unmatched provider/model, out-of-domain effort, or duplicate role is inconsistent state. Stop, show the conflicting rows verbatim, and ask for an explicit matrix family or alias replacement. If one or more families have mixed efforts, show every conflicting family and role row, then ask for one normalized effort per family from its Selectable efforts cell. Do not invent a precedence rule. Do not probe or write while any inconsistency is unresolved.
 
-A family is a single `(provider, model)` matrix row. DeepSeek Flash and Pro have independent efforts, as do MiniMax M3 and M3.1 Flash Preview. Each distinct OpenRouter model ID is its own family under the open row, with its own effort and probe. Never group efforts or deduplicate probes by provider alone.
+A family is a single `(provider, model)` matrix row. DeepSeek Flash and Pro have independent efforts, as do MiniMax M3 and M3.1 Flash Preview. Each distinct OpenRouter model ID is its own family under the open row, with its own effort and probe, and so is each distinct OpenCode model ID. Never group efforts or deduplicate probes by provider alone.
 
 One distinct effort per family is the current value. A family with no non-alias occurrence is unassigned: do not ask for its effort, check its CLI, or probe it. A family that a step 2 role change newly assigns takes its matrix Default effort as the proposed value.
 
@@ -64,25 +48,13 @@ Ask one effort question for each assigned family. Name each model, its current o
 
 Probe only the selected `provider:model@effort` pair of each assigned family. Run one probe per family in the role map, even when two families share a provider. Do not enumerate or offer older models as substitutes. A failed probe writes nothing: report the failing pair and provider, stop, and keep the scoped sheet plus parent integration bytes unchanged. A failed model demands explicit repair or role reassignment before saving. A failed first run creates neither artifact.
 
-| Family | Pair source | Claude parent route | Codex parent route | Availability proof |
-|---|---|---|---|---|
-| Fable | Fable matrix row + selected effort | native Agent `pstack-fable-<effort>` | Claude CLI | native one-turn probe or `claude auth status --json` plus one-turn probe |
-| Sol | Sol matrix row + selected effort | `codex exec` | native `spawn_agent` | `codex login status` plus one-turn probe or native one-turn probe |
-| Astra | Astra matrix row + selected effort | external runner | native `spawn_agent` | `codex login status` plus one-turn probe or native one-turn probe |
-| GPT-6.1 Sol | sol-6.1 matrix row + selected effort | external runner | native `spawn_agent` | `codex login status` plus one-turn probe or native one-turn probe |
-| GPT-6 Sol | sol-6 matrix row + selected effort | external runner | native `spawn_agent` | `codex login status` plus one-turn probe or native one-turn probe |
-| Luna | Luna matrix row + selected effort | external runner | native `spawn_agent` | `codex login status` plus one-turn probe or native one-turn probe |
-| Grok | Grok matrix row + selected effort | Grok CLI | Grok CLI | `grok models` must list the requested model; one-turn probe |
-| Opus | Opus matrix row + selected effort | native Agent `pstack-opus-<effort>` | Claude CLI | native one-turn probe or `claude auth status --json` plus one-turn probe |
-| DeepSeek Flash / Pro | Each assigned DeepSeek flex row + selected effort | external runner | external runner | `DEEPSEEK_API_KEY` present; isolated config dir free of OAuth credentials; one-turn probe confirms the endpoint |
-| MiniMax M3 / M3.1 Flash Preview | Each assigned MiniMax flex row + selected effort | external runner | external runner | `MINIMAX_API_KEY` present; isolated config dir free of OAuth credentials; one-turn probe confirms the endpoint |
-| OpenRouter (any model ID) | Each assigned OpenRouter model ID + selected effort | external runner | external runner | `OPENROUTER_API_KEY` present; isolated config dir free of OAuth credentials; one-turn probe that reads its marker from a file |
+Use each descriptor's route from the selected adapter. A native pair uses that adapter's native one-turn invocation; an external pair uses `pstack-runner` with the explicit parent, provider, model, and selected effort. The runner owns CLI/authentication/model preflight. Keep every exact-pair receipt or native transcript. Do not repeat routing by family or invent another harness detector.
 
 For MiniMax M3.1 Flash Preview, disclose the Token Plan requirement before probing. Use the eligible subscription key through `MINIMAX_API_KEY`; do not assume a working M3 key grants preview access. A failed preview probe must not silently select M3. Keep preview thinking enabled and verify requested effort forwarding; distinguish request evidence from hidden applied reasoning depth.
 
 Before the first OpenRouter probe, tell the operator three things: OpenRouter forwards prompts to whichever host serves the model, data-collection and zero-data-retention routing plus the key's credit limit are set on OpenRouter's dashboard, and each probe spends a little credit. Probe exactly the model ID the operator named. A failed OpenRouter probe does not offer another catalog model; report OpenRouter's error and ask for a replacement ID or a role reassignment.
 
-Use a tiny read-only probe that returns a unique marker. For an OpenRouter model, write the marker to a file in a scratch directory and leave it out of the prompt, so a passing probe proves the model made a tool call; Claude Code lanes cannot work without one. A login-status command alone proves credentials, not that the requested model and effort flags run. Record native and external results separately. Never call the external launcher for the parent's own provider. On a Claude parent, the Fable and Opus probes are one-turn runs of the mapped `pstack-<stem>-<effort>` agent. On a Codex parent, each assigned Codex family gets a native `spawn_agent` probe with its matrix model and selected `reasoning_effort`. Every other pair, flex families always included, uses the external runner with the selected effort flag. A flex probe doubles as the base-URL confirmation: it proves the documented default (or the operator's override) actually serves the lane's model.
+Use a tiny read-only probe returning a unique marker from a scratch file. Leave the marker out of the prompt so success proves a tool call. A login-status check alone does not prove the assigned model and effort work. Inspect offered variants when a runner refuses an effort. A gateway probe also confirms the endpoint default or override.
 
 Receipts and native transcripts prove the requested effort and the route. They do not prove a provider's hidden applied reasoning depth. There is no implicit timeout, weaker-model fallback, same-provider external fallback, or second mutable configuration source.
 
@@ -96,11 +68,11 @@ Build the new sheet in memory. Do not write it yet.
 
 Require every documented role to remain present and non-empty, `architect runners` to keep at least two entries, and the final role map to contain at least one assigned matrix family. There is no requirement to assign every matrix family.
 
-Different models sharing a provider count as one provider, even when their efforts differ. An OpenRouter lane counts as its model ID's lab, as `provider-dispatch.md` defines: the namespaces `anthropic`, `openai`, `x-ai`, `deepseek`, and `minimax` match the direct providers, and any other namespace is a provider of its own.
+Different models sharing a provider count as one provider, even when their efforts differ. An OpenRouter lane counts as its model ID's lab, as `provider-dispatch.md` defines: the namespaces `anthropic`, `openai`, `x-ai`, `deepseek`, and `minimax` match the direct providers, and any other namespace is a provider of its own. An OpenCode lane counts as its model's lab the same way.
 
 Validate panel diversity: `arena runners` and `interrogate reviewers` must span at least two distinct providers. A single-provider panel is written only after the operator explicitly confirms the reduced diversity; record that confirmation in the setup report.
 
-Rewrite every matrix-family descriptor to `provider:model@<requested effort for that family>`. Leave `inherit-parent` and `auto` unchanged. An effort-only rerun cannot change a role's family. Changing Grok's effort updates every Grok occurrence and does not move a Sol role onto Grok. Refuse an unqualified slug, an unavailable route, a model outside the stock and flex matrix families, an OpenRouter ID without a namespace or from the `openrouter/*` routers, or a provider/model mismatch.
+Rewrite every matrix-family descriptor to `provider:model@<requested effort for that family>`. Leave `inherit-parent` and `auto` unchanged. An effort-only rerun cannot change a role's family. Changing Grok's effort updates every Grok occurrence and does not move a Sol role onto Grok. Refuse an unqualified slug, an unavailable route, a model outside the stock and flex matrix families, an OpenRouter ID without a namespace or from the `openrouter/*` routers, an OpenCode ID without its `<provider>/` prefix, or a provider/model mismatch.
 
 ### 7. Confirm and commit
 
@@ -110,7 +82,7 @@ Why and Reflect require the parent's live MCP surface. Keep their investigator, 
 
 Every non-alias value must match `<provider>:<model>@<effort>` and must have passed step 5.
 
-After the operator confirms, write the in-memory render from step 6. Never paste the example below as the result. It is only the complete first-run role map used to seed step 2; selected efforts and explicit role changes always replace its example values before writing.
+After the operator confirms, pass the in-memory render from step 6 to step 8's write transaction. Never paste the example below as the result. It is only the complete first-run role map used to seed step 2; selected efforts and explicit role changes always replace its example values before writing.
 
 ```markdown
 # pstack model configuration
@@ -136,9 +108,7 @@ interrogate reviewers: claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@x
 
 ### 8. Wire it in
 
-Project scope has no parent integration. Write only the project sheet, creating its directory when needed. Then make sure `.git/info/exclude` in the repository's common git directory lists the sheet's path relative to the project root, adding that one line when it is absent. Never add the sheet to a tracked `.gitignore`, stage it, or commit it. Snapshot, readback, and restore apply to the sheet and the exclude file exactly as below. The rest of this step applies to global scope.
-
-Render the parent integration in memory before either write. On Claude, the integration is the single `@~/.claude/pstack-models.md` include in `~/.claude/CLAUDE.md`. On Codex, it is the exact sheet bytes between one `<!-- pstack:models:begin -->` and `<!-- pstack:models:end -->` pair in `~/.codex/AGENTS.md`. Replace that whole bounded block on a rerun. Insert one block at the end on first run. If either marker is missing, duplicated, or reversed, stop and report inconsistent state instead of guessing a boundary.
+Use the paths and integration type returned by the context inspector and apply the corresponding recipe in harness integration. Project scope writes only the project sheet and the common git directory's `info/exclude`. Never add the sheet to a tracked `.gitignore`, stage it, or commit it. Global scope applies the selected include, mirror-block, or instructions-array recipe. Render both targets in memory before writing.
 
 Snapshot every target's current bytes. Write the sheet and parent integration only after every requested pair passes and the operator confirms. Read both targets back and compare them with the in-memory render. If either write or readback fails, restore every snapshot and report the failure. An unchanged rerun must produce byte-identical sheet and integration content after normalization.
 
@@ -146,6 +116,6 @@ Do not copy the model sheet between harnesses or between projects without rerunn
 
 ### 9. Behavioral smoke
 
-Before declaring setup complete, run one small read-only mixed panel from this parent: every distinct chosen descriptor, distinct output/receipt paths, and an independent cross-judge when at least two providers are assigned. Launch Claude-native agents and every external process in the background with retained handles, then drain them. Verify the native transcript entries and every external receipt. A structural config check or unit test is not a substitute.
+Before declaring setup complete, run one small read-only mixed panel from this parent: every distinct chosen descriptor, distinct output/receipt paths, and an independent cross-judge when at least two providers are assigned. Launch every lane with the selected adapter's retained handles, then drain them. Verify the native transcript entries and every external receipt. A structural config check or unit test is not a substitute.
 
 Report the scope, the sheet path, parent route table, requested-effort probe results, smoke results, and external elapsed/token/cost receipts. For a project sheet, add that deleting the file returns the project to the global sheet. Re-running this skill in the same scope re-probes and updates the same sheet. Do not claim the provider exposed hidden applied-effort observability.

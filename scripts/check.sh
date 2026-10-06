@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Runs every local check a pull request needs before review: install,
-# tests, strict typecheck, manifest parse, static
-# invariants, and Claude plugin validation when the claude CLI is present.
-# This is the local half of the gate. The live half is docs/LIVE-GATE.md.
 set -uo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"

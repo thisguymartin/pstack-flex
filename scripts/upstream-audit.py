@@ -25,8 +25,6 @@ def tree(ref, prefix):
 
 def port_path(path):
     relative = path.removeprefix("pstack/")
-    if relative == "README.md":
-        return "README-UPSTREAM.md"
     if relative.startswith(("skills/", "agents/", "assets/")):
         return "plugins/pstack/" + relative
     return None
@@ -40,14 +38,14 @@ args = parser.parse_args()
 port = git("rev-parse", "--verify", args.port + "^{commit}").decode().strip()
 target = git("rev-parse", "--verify", args.upstream + "^{commit}").decode().strip()
 sync_doc = git("show", port + ":UPSTREAM.md").decode()
-match = re.search(r"^\| Commit \| `([0-9a-f]{40})` \|$", sync_doc, re.MULTILINE)
-if not match:
-    parser.error("UPSTREAM.md must contain exactly the recorded full commit row")
-base = match.group(1)
+pins = re.findall(r"^\| (?:Cursor content imported by open-pstack \| [^|]+ \||Commit \|) `([0-9a-f]{40})` \|$", sync_doc, re.MULTILINE)
+if len(pins) != 1:
+    parser.error("UPSTREAM.md must contain one full Cursor content pin")
+base = pins[0]
 subprocess.run(["git", "merge-base", "--is-ancestor", base, target], cwd=ROOT, check=True)
 before = tree(base, "pstack/")
 after = tree(target, "pstack/")
-local = tree(port, "plugins/pstack/") | tree(port, "README-UPSTREAM.md")
+local = tree(port, "plugins/pstack/")
 
 changes = []
 for path in sorted(before.keys() | after.keys()):

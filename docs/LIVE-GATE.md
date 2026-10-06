@@ -1,72 +1,72 @@
 # Live gate
 
-AGENTS.md says nothing merges, tags, releases, or rolls out until the exact candidate is installed and the changed behavior passes a live test from the real user surface in every affected harness. Unit tests, validators, and source reading do not count. This page is how to run that test and where to record it.
+Nothing merges, tags, releases, or rolls out until the exact candidate is installed and the changed behavior passes from the real user surface in every affected harness. Unit tests, validators, source inspection, and agent self-reports do not satisfy this gate. A PR without installed evidence stays a draft.
 
-There are two halves:
+## Run the local gate
 
-1. **Local gate.** One command, runs anywhere: `bash scripts/check.sh`. It installs both Bun packages, runs their tests and strict typechecks, parses every manifest, runs the static invariants, and runs `claude plugin validate` on the marketplace and both plugins when the `claude` CLI is present.
-2. **Live gate.** You, in a real Claude Code and a real Codex session, with the candidate installed. Steps below.
+Run `bash scripts/check.sh`. It installs the Bun package, runs tests and strict typechecks, parses manifests, and checks static invariants. It also runs Claude plugin validation when the CLI is installed. Record any skipped check rather than calling it passed.
 
-## 1. Install the exact candidate
+## Install the exact candidate
 
-Push the branch first, so both harnesses install the same commit.
+Publish the candidate branch so each app installs the same commit. Clone that branch for local marketplace or skill-path installation:
 
-Claude Code: check out the branch, then add that checkout as the marketplace (inside a session):
+```shell
+git clone -b <branch> https://github.com/thisguymartin/pstack-flex ~/src/pstack-flex-candidate
+git -C ~/src/pstack-flex-candidate rev-parse HEAD
+```
+
+In Claude Code, add that checkout and reload:
 
 ```text
-! git clone -b <branch> https://github.com/thisguymartin/pstack-flex ~/src/pstack-flex-candidate
 /plugin marketplace add ~/src/pstack-flex-candidate
 /plugin install pstack@pstack-flex
 /reload-plugins
 ```
 
-Codex (shell):
+For Codex, install the candidate branch from the shell:
 
 ```shell
 codex plugin marketplace add thisguymartin/pstack-flex --ref <branch>
 codex plugin add pstack@pstack-flex
 ```
 
-Start a new session in each harness afterwards. Record the installed version: the `pstack` version from the plugin list, plus `claude --version` and `codex --version`.
+For OpenCode beta, point `skills.paths` and the opt-in `instructions` entry at the candidate checkout using the [README configuration](../README.md#opencode-beta). Keep the beta qualification until its installed behavior passes.
 
-If you had open-pstack or an older pstack-flex installed under the `open-pstack` marketplace name, remove it first so only one plugin named `pstack` is active.
+Start a fresh session in each affected app. Check the active plugin's source repository and installed commit; a matching version alone is insufficient. Keep only one active `pstack` installation. Record the plugin version or checkout commit, plus the app's CLI version.
 
-## 2. Run the checks for what changed
+## Exercise the changed behavior
 
-Run the rows that match the change. A change that touches the runner or the model sheet runs rows A to C in both harnesses.
+Use a scratch repository with synthetic data. Run the rows affected by the change. Runner, configuration, or setup changes require setup, scope, and dispatch checks in every affected parent.
 
-| Row | Action | Pass when |
+| Change | Action | Required observation |
 | --- | --- | --- |
-| A. Opt-in gate | In a fresh session, ask for a two-line fix without naming pstack. Then ask again with "Use pstack for this." | The first request runs no `pstack:` skill. The second enters `pstack:poteto-mode`. |
-| B. Setup | Run `/pstack:setup-pstack` (Claude Code) or `Use pstack:setup-pstack.` (Codex). Keep defaults or change one role. | Every assigned family probes `complete`, the sheet is written to `~/.claude/pstack-models.md` or `~/.codex/pstack-models.md`, and a failed probe writes nothing. |
-| C. Mixed panel | `Use pstack:interrogate on the last commit.` | Each configured reviewer returns, external lanes write receipts with `status: complete`, and any missing CLI shows as a named dropout, not a substitute. |
-| D. Gateway lane | With `DEEPSEEK_API_KEY`, `MINIMAX_API_KEY`, or `OPENROUTER_API_KEY` exported, assign one role to that family in setup (for OpenRouter, any model ID you name) and run it once. | The receipt shows `status: complete`, the requested model, and `costUsd: null`. |
-| E. Lane journal | `mkdir -p ~/.pstack-flex/lanes`, run one external lane (for example an interrogate with a Codex reviewer from Claude Code), then `rm -rf ~/.pstack-flex/lanes`. With [psf-monitor](https://github.com/thisguymartin/psf-monitor) installed, watch the lane on its page instead. | While it runs, the lane's directory holds `lane.json` and a growing `stream.jsonl`; after it ends, `receipt.json` matches the runner's receipt. With the directory removed, the next lane writes nothing there and its receipt is unchanged. |
-| F. intake | In a scratch repo with a real issue: `Use pstack:intake for #<n>.` | A brief appears under `.pstack/intake/`, with one playbook, an observable exit condition, and open questions when the issue is vague. No product code changes. |
-| G. diff-behavior | In a scratch repo, make a branch that changes one scenario on purpose and one by accident. `Use pstack:diff-behavior on this branch.` | The report lists the accidental change as unintended and the deliberate one as intended, with evidence for both sides. |
+| Opt-in instruction | Request a small fix without naming pstack, then repeat with "Use pstack for this." | Only the second request enters `poteto-mode`. |
+| Setup | Run `setup-pstack`, change one role and its effort, then repeat with an invalid model. | Assigned families probe successfully before writes. The invalid probe leaves sheets and integrations unchanged. An unchanged rerun preserves bytes. |
+| Sheet scope | Configure different global and project roles, run from the primary checkout and a linked worktree, then inspect `pstack-context`. | Both worktrees select the same project sheet. A separate repository without one uses global scope. Config directory overrides select the expected paths. |
+| Mixed panel | Run `interrogate` with qualified native and external roles, plus an inherited role. | Each route matches the context. External receipts name requested models and efforts. Missing providers become named dropouts without substitutions. |
+| Gateway lane | Assign a gateway model in setup and run a task that reads a synthetic file marker absent from its prompt. | A tool call reads the marker. The receipt completes with the requested model and `costUsd: null`. Bad auth or model IDs fail without changing the sheet. |
+| OpenCode beta parent | Run setup and a panel from a real OpenCode session with qualified and inherited roles. | Qualified roles run externally with parent `opencode`; inherited roles use native `task`. Scope and instructions update once. |
+| OpenCode beta lane | Run a read-only lane and a writer lane, then request an unsupported effort and a task requiring tests. | Permissions hold. The invalid effort fails. The writer reports tests as unsupported and does not claim to run them. |
+| Background and cancellation | Launch a lane that outlives the parent's foreground shell limit, then send SIGTERM to a throwaway lane. | The first returns a complete receipt after that limit. The cancelled lane writes a cancelled receipt. |
+| Lane journal | Run with a temporary `PSTACK_FLEX_LANES_DIR` directory, then repeat with that directory absent. | The directory contains start metadata, growing stdout, and the matching receipt. Without it, the lane still completes without journal files. |
+| `intake` | Run against a scratch repository's real issue. | A brief under `.pstack/intake/` names a playbook, observable exit condition, and unresolved questions. Product code stays unchanged. |
+| `diff-behavior` | Compare branches with one intended and one accidental observable change. | The report identifies both changes with evidence from each branch. |
 
-## 3. Record the evidence
+New models also need a probe and a role run from each affected app. Gateway protocol changes need a file tool call, a second turn using its result, and explicit bad-key and bad-model results. `scripts/probe-openrouter.sh` supplies the OpenRouter route battery and spends real credit; it is outside CI. Record results in the tracking issue and PR rather than a separate probe archive.
 
-Paste this into the pull request under "Live evidence", one block per harness:
+## Record evidence in the PR
+
+Use one block per affected harness:
 
 ```text
-Harness: Claude Code <claude --version> | Codex <codex --version>
-Installed: pstack <version> @ <commit>
-Row <letter>: <action you took>
-Observed: <what happened, with receipt or screenshot path>
-Result: pass | fail
+Harness: <app> <CLI version>
+Installed: pstack <version> @ <exact commit>
+Surface: <real session and entry point>
+Action: <setup, role, scope, model, effort, or failure case exercised>
+Observed: <result and receipt, transcript, or screenshot path>
+Result: pass | fail | not run
 ```
 
-A pull request without this stays a draft.
+Record unsupported requirements and failures directly. Do not convert a runner-only result into proof of parent behavior. Keep the PR draft until every required installed test passes.
 
-## Outstanding live tests
-
-These merged without an installed live test. Clear them with one session per harness on current `main`, then record the results in a tracking issue and tick the rows.
-
-| PR | Change | Rows to run | Status |
-| --- | --- | --- | --- |
-| #16 | GPT-6 families and first-run defaults | B, C | not run |
-| #19, #20 | Opt-in gate (Claude Code and Codex) | A | not run |
-| #22 | open-pstack 1.5.0 merge, setup step order, grok-4.7 pin | B, C | not run |
-| #24, #25 | Lane journal (the monitor itself moved to psf-monitor in #28) | E | checkout build only, not installed |
-| #26 | Rename to pstack-flex, intake, diff-behavior, doc fixes | A, B, F, G | not run |
+Outstanding installed checks from earlier merged work are tracked in [#36](https://github.com/thisguymartin/pstack-flex/issues/36). Each candidate still needs its own evidence.

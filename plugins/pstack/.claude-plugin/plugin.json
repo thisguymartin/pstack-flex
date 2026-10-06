@@ -2,7 +2,7 @@
   "name": "pstack",
   "displayName": "pstack",
   "version": "1.5.0",
-  "description": "if you want to go fast, go deep first. pstack helps you write less, but higher quality code. rigorous agent workflows you can parallelize with confidence. Ported from cursor/plugins/pstack for Claude Code and Codex.",
+  "description": "Shared pstack engineering workflows with coding-agent harness adapters and configurable model lanes.",
   "author": {
     "name": "Lauren Tan"
   },

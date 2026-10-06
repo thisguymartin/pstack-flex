@@ -1,21 +1,12 @@
 #!/usr/bin/env bash
-# V6 in docs/LANES.md: the OpenRouter route battery from issue #7.
+# OpenRouter route battery from issue #7; evidence goes in the issue or PR.
 # It spends real OpenRouter credit (cents), so it never runs in CI or
 # check.sh. The key comes from OPENROUTER_API_KEY and is never printed or
 # put on a command line.
 #
 #   OPENROUTER_API_KEY=... bash scripts/probe-openrouter.sh [model ...]
 #
-# Per model, through pstack-runner (read-only, synthetic workspace):
-#   chain      read start.txt, follow it to a second file, return the value
-#              there. Neither the file name nor the value is in the prompt, so
-#              a pass proves tool calls across turns.
-#   effort     the same no-tool puzzle at low and at high; compare the
-#              reasoning tokens Claude Code reports.
-#   identity   one direct OpenRouter call: the model and host it served.
-# Then the failure strings: a wrong ID, a bad key, a model without tools, a
-# `~` rolling alias, and a `:free` variant. The bad-key lane takes about three
-# minutes: Claude Code retries a 401 before it gives up.
+# Claude Code retries a bad gateway key for about three minutes before failing.
 set -uo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
@@ -52,7 +43,6 @@ workspace() {
   printf '%s' "$ws"
 }
 
-# lane <case> <model> <effort> <prompt> <cwd> <expected or "">
 lane() {
   local name="$1" model="$2" effort="$3" prompt="$4" cwd="$5" expected="$6"
   local dir="$out/$name"
@@ -75,7 +65,6 @@ lane() {
       .elapsedMs, ((.error.message // "-") | gsub("[\n|]"; " ") | .[0:160])
     ] | @tsv' "$dir/receipt.json" >> "$rows"
   else
-    # The runner refused before reserving a receipt (a usage error).
     printf '%s\t%s\t%s\tusage-error\t-\t-\t-\t-\t-\t-\t%s\n' "$name" "$model" "$effort" \
       "$(tr '\n|' '  ' < "$dir/stderr.txt" | cut -c1-160)" >> "$rows"
   fi
@@ -92,7 +81,6 @@ for model in "${models[@]}"; do
   lane "high-$slug" "$model" high "$puzzle_prompt" "$ws" "62"
 done
 
-# Failure strings and edge forms. The catalog is public; no key needed.
 catalog="$out/catalog.json"
 curl -fsS "$api/models" -o "$catalog"
 no_tools="$(jq -r '[.data[] | select((.supported_parameters // []) | index("tools") | not)

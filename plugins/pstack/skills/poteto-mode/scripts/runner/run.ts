@@ -10,15 +10,20 @@ import {
 } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { invocationCommand, preflightCommand, type CommandSpec } from "./commands.ts";
+import { laneRoute, withoutParentIdentity } from "../harnesses.ts";
+import {
+  openCodeEnvironment,
+  inspectOpenCodeModels,
+} from "./opencode-lane.ts";
 import { openLaneJournal, type LaneTap } from "./flex-journal.ts";
 import {
   GATEWAY_INHERITED_CONFLICTS,
   gatewayEnvironment,
   gatewayGuard,
-  openRouterModelRefusal,
 } from "./flex-providers.ts";
 import { versionedClaudeAlias } from "./model-aliases.ts";
-import { parseProviderOutput, reportedModelMatches } from "./parse-output.ts";
+import { parseProviderOutput, reportedModelMatches, acceptsUnreportedModel } from "./parse-output.ts";
+import { modelRefusal } from "./model-refusal.ts";
 import type {
   Provider,
   ReceiptStatus,
@@ -119,41 +124,22 @@ function installRunCancellation(): RunCancellation {
   };
 }
 
-const CODEX_IDENTITY = [
-  "CODEX_THREAD_ID",
-  "CODEX_SESSION_ID",
-  "CODEX_CI",
-  "CODEX_SHELL",
-  "CODEX_SANDBOX",
-  "CODEX_SANDBOX_NETWORK_DISABLED",
-  "CODEX_INTERNAL_ORIGINATOR_OVERRIDE",
-] as const;
-
-const CLAUDE_IDENTITY = [
-  "CLAUDECODE",
-  "CLAUDE_CODE_CHILD_SESSION",
-  "CLAUDE_CODE_SESSION_ID",
-  "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",
-] as const;
-
 export function childEnvironment(
   provider: Provider,
   source: NodeJS.ProcessEnv = process.env,
   model: string = ""
 ): NodeJS.ProcessEnv {
-  const result = { ...source };
-  const remove = provider === "claude"
-    ? CODEX_IDENTITY
-    : provider === "codex"
-      ? CLAUDE_IDENTITY
-      : [...CODEX_IDENTITY, ...CLAUDE_IDENTITY];
-  for (const key of remove) delete result[key];
+  const result = withoutParentIdentity(provider, source);
   if (isGatewayProvider(provider)) {
     for (const key of Object.keys(result)) {
       if (key.startsWith("ANTHROPIC_")) delete result[key];
     }
     for (const key of GATEWAY_INHERITED_CONFLICTS) delete result[key];
     Object.assign(result, gatewayEnvironment(provider, model, source));
+  }
+  if (provider === "opencode") {
+    delete result.OPENCODE_CONFIG_CONTENT;
+    Object.assign(result, openCodeEnvironment());
   }
   return result;
 }
@@ -370,7 +356,8 @@ async function waitForGrokPreflightRetry(
   }
 }
 
-function preflightPassed(provider: Provider, model: string, result: ProcessResult): boolean {
+function preflightPassed(options: RunnerOptions, result: ProcessResult): boolean {
+  const { provider, model } = options;
   if (result.exitCode !== 0 || result.timedOut) return false;
   // `claude --version` succeeded; gateway credentials were already verified
   // in-process by the gateway guard before any subprocess ran.
@@ -394,9 +381,11 @@ function preflightPassed(provider: Provider, model: string, result: ProcessResul
     case "grok":
       return /logged in/i.test(combined) && combined.includes(model);
   }
+  return false;
 }
 
-function successfulPreflightEvidence(provider: Provider, model: string): string {
+function successfulPreflightEvidence(options: RunnerOptions): string {
+  const { provider, model } = options;
   if (isGatewayProvider(provider)) {
     return "claude binary responded; gateway credentials verified in-process";
   }
@@ -405,13 +394,28 @@ function successfulPreflightEvidence(provider: Provider, model: string): string 
     : "authenticated";
 }
 
+function inspectPreflight(options: RunnerOptions, result: ProcessResult): {
+  readonly status: "passed" | ReceiptStatus;
+  readonly evidence: string;
+} {
+  if (options.provider === "opencode" && result.exitCode === 0 && !result.timedOut) {
+    return inspectOpenCodeModels(result.stdout, options.model, options.effort);
+  }
+  const raw = evidence(`${result.stdout}\n${result.stderr}`);
+  const passed = preflightPassed(options, result);
+  return {
+    status: passed ? "passed" : preflightFailureStatus(options.provider, options.model, raw),
+    evidence: passed ? successfulPreflightEvidence(options) : raw,
+  };
+}
+
 function unavailableStatus(value: string): ReceiptStatus {
   // Claude Code 2.1.289 reports a rejected gateway key as "Failed to
   // authenticate. API Error: 401" with `"api_error_status":401` in its result.
-  if (/not logged in|unauthenticated|authenticat(e|ion)|sign in|login required|"api_error_status":\s*401\b/i.test(value)) {
+  if (/not logged in|unauthenticated|authenticat(e|ion)|sign in|login required|"api_error_status":\s*401\b|ProviderAuthError/i.test(value)) {
     return "unauthenticated";
   }
-  if (/model.{0,40}(not found|unknown|unavailable|unsupported|not supported|invalid)|invalid.{0,20}model/i.test(value)) {
+  if (/model.{0,40}(not found|unknown|unavailable|unsupported|not supported|invalid)|invalid.{0,20}model|ModelNotFound/i.test(value)) {
     return "unavailable-model";
   }
   return "child-failed";
@@ -428,6 +432,11 @@ function preflightFailureStatus(
     // The gateway preflight is a version probe, not an auth check; a
     // failure here means the binary misbehaved, not that auth failed.
     return "child-failed";
+  }
+  if (provider === "opencode") {
+    return /Provider not found/.test(value)
+      ? "unavailable-model"
+      : "child-failed";
   }
   return provider === "grok" && !value.includes(model)
     ? "unavailable-model"
@@ -483,17 +492,7 @@ function modelProof(
       modelEvidence: "provider-report",
     };
   }
-  if (provider === "codex" && reported === null) {
-    return {
-      reportedModel: null,
-      modelVerified: false,
-      modelEvidence: "pinned-argv",
-    };
-  }
-  if (isGatewayProvider(provider) && reported === null) {
-    // Third-party Anthropic-compatible endpoints do not reliably echo the
-    // requested model slug. A reported mismatch is a failure, since some
-    // gateways silently substitute a default model for unknown slugs.
+  if (acceptsUnreportedModel(provider) && reported === null) {
     return {
       reportedModel: null,
       modelVerified: false,
@@ -526,7 +525,7 @@ function completeReceipt(
 }
 
 export function validateOptions(options: RunnerOptions): void {
-  if (options.parent === options.provider) {
+  if (laneRoute(options.parent, options.provider) === "native") {
     throw new UsageError(
       `provider ${options.provider} is native to parent ${options.parent}; use the parent subagent primitive`
     );
@@ -540,10 +539,8 @@ export function validateOptions(options: RunnerOptions): void {
       `Claude model ${options.model} is a version pin; normalize it to ${staleAlias} before invoking the runner`
     );
   }
-  const routerRefusal = options.provider === "openrouter"
-    ? openRouterModelRefusal(options.model)
-    : null;
-  if (routerRefusal !== null) throw new UsageError(routerRefusal);
+  const refusal = modelRefusal(options.provider, options.model);
+  if (refusal !== null) throw new UsageError(refusal);
   if (
     options.timeoutMs !== null &&
     (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0)
@@ -582,7 +579,7 @@ async function executeLane(
 ): Promise<RunResult> {
   const startedAt = new Date(started).toISOString();
   const prompt = readFileSync(options.promptPath, "utf8");
-  const env = childEnvironment(options.provider, process.env, options.model);
+  const env = { ...childEnvironment(options.provider, process.env, options.model), ...invocation.environment };
   const executable = Bun.which(invocation.command, {
     PATH: env.PATH,
     cwd: options.cwd,
@@ -706,11 +703,10 @@ async function executeLane(
     deadlineAt,
     cancellation
   );
-  let rawPreflightEvidence = evidence(`${preflightResult.stdout}\n${preflightResult.stderr}`);
-  let passed = preflightPassed(options.provider, options.model, preflightResult);
-  let preflightEvidence = passed
-    ? successfulPreflightEvidence(options.provider, options.model)
-    : rawPreflightEvidence;
+  let verdict = inspectPreflight(options, preflightResult);
+  let rawPreflightEvidence = verdict.evidence;
+  let passed = verdict.status === "passed";
+  let preflightEvidence = verdict.evidence;
 
   if (
     options.provider === "grok" &&
@@ -750,12 +746,13 @@ async function executeLane(
       deadlineAt,
       cancellation
     );
-    rawPreflightEvidence = evidence(`${preflightResult.stdout}\n${preflightResult.stderr}`);
-    passed = preflightPassed(options.provider, options.model, preflightResult);
+    verdict = inspectPreflight(options, preflightResult);
+    rawPreflightEvidence = verdict.evidence;
+    passed = verdict.status === "passed";
     preflightEvidence = retriedPreflightEvidence(
       firstPreflightEvidence,
       passed
-        ? successfulPreflightEvidence(options.provider, options.model)
+        ? successfulPreflightEvidence(options)
         : rawPreflightEvidence,
       passed
     );
@@ -776,11 +773,7 @@ async function executeLane(
 
   if (preflightState.status !== "passed") {
     const completed = Date.now();
-    const preflightFailure = preflightFailureStatus(
-      options.provider,
-      options.model,
-      rawPreflightEvidence
-    );
+    const preflightFailure = verdict.status === "passed" ? "child-failed" : verdict.status;
     const status: ReceiptStatus = preflightResult.cancelledBy !== null
       ? "cancelled"
       : preflightResult.timedOut
@@ -935,7 +928,7 @@ export async function runLane(
   validateOptions(options);
   const deadlineAt = options.timeoutMs === null ? null : started + options.timeoutMs;
   const invocation = invocationCommand(options);
-  const preflight = preflightCommand(options.provider);
+  const preflight = preflightCommand(options.provider, options.model);
   const progress: LaneProgress = {
     executable: null,
     preflight: {

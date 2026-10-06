@@ -24,6 +24,52 @@ describe("parseProviderOutput", () => {
     });
   });
 
+  it("extracts the last OpenCode text and sums every step's tokens", () => {
+    const event = (type: string, part: object) =>
+      JSON.stringify({ type, timestamp: 1, sessionID: "ses_1", part });
+    const parsed = parseProviderOutput(
+      "opencode",
+      [
+        event("step_start", { type: "step-start" }),
+        event("text", { type: "text", text: "Reading the file." }),
+        event("tool_use", { type: "tool", tool: "read" }),
+        event("step_finish", { type: "step-finish", cost: 0.1, tokens: { input: 100, output: 10, reasoning: 4, cache: { read: 20, write: 5 } } }),
+        event("text", { type: "text", text: "OPENCODE_OK" }),
+        event("step_finish", { type: "step-finish", cost: 0.1, tokens: { input: 150, output: 6, reasoning: 0, cache: { read: 90, write: 0 } } }),
+      ].join("\n"),
+      "",
+      "openrouter/z-ai/glm-5.3"
+    );
+    expect(parsed).toEqual({
+      text: "OPENCODE_OK",
+      reportedModel: null,
+      sessionId: "ses_1",
+      usage: {
+        inputTokens: 250,
+        cachedInputTokens: 110,
+        cacheCreationInputTokens: 5,
+        outputTokens: 16,
+        reasoningTokens: 4,
+      },
+      costUsd: null,
+    });
+  });
+
+  it("fails an OpenCode run on an error event or a missing answer", () => {
+    const error = JSON.stringify({
+      type: "error",
+      sessionID: "ses_1",
+      error: { name: "APIError", data: { message: "No endpoints found for z-ai/glm-9" } },
+    });
+    expect(() => parseProviderOutput("opencode", error, "", "openrouter/z-ai/glm-9")).toThrow(
+      "No endpoints found for z-ai/glm-9"
+    );
+    expect(() =>
+      parseProviderOutput("opencode", JSON.stringify({ type: "step_start", sessionID: "s", part: {} }), "", "a/b")
+    ).toThrow("did not contain final text");
+    expect(() => parseProviderOutput("opencode", "not-json", "", "a/b")).toThrow("non-JSON");
+  });
+
   it("extracts Codex JSONL without inventing a provider-reported model", () => {
     const parsed = parseProviderOutput(
       "codex",
