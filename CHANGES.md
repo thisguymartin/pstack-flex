@@ -9,6 +9,14 @@
 - `scripts/probe-openrouter.sh` runs the #7 route battery (V6 in `docs/LANES.md`). It spends real credit, so it is not part of `check.sh` or CI.
 - Design and flow diagrams: [docs/plans/2026-10-05-openrouter-gateway.md](docs/plans/2026-10-05-openrouter-gateway.md).
 
+## Unreleased: project model sheets and GPT-6.1 Sol
+
+- `setup-pstack` asks on every run whether to configure the global sheet or a project sheet. A project sheet lives at `<project root>/.claude/pstack-models.md` (Claude Code) or `<project root>/.codex/pstack-models.md` (Codex), starts from the global assignments, and is listed in `.git/info/exclude` so it never reaches a commit. It needs no CLAUDE.md include and no AGENTS.md block.
+- `provider-dispatch.md` gains a "Sheet scope" section: the parent reads the project path once before dispatch, an existing project sheet replaces the global sheet whole, and a project without one uses the global sheet. The two are never merged per role.
+- Add the `sol-6.1` stock family, `codex:gpt-6.1-sol@high`, which Codex CLI 0.160.0 lists as its latest coding model. It takes the first-run `feature, refactoring`, `bug-fix`, `perf-issue`, and `hillclimb` roles. `sol-6` stays selectable; existing sheets keep their rows until setup reassigns them.
+- `architect runners` gets its own first-run default, `codex:gpt-6-astra@high, claude:fable@max`, from a new "Default architect panel" line. The other three panel roles keep the four-lane default.
+- The matrix test and the static invariant check cover the new row, the architect line, and the scope contract.
+
 ## Unreleased: pstack-flex becomes its own distribution
 
 - The marketplace is now `pstack-flex` (was `open-pstack`) in both the Claude Code and Codex marketplace files. Install with `pstack@pstack-flex`. The plugin keeps the name `pstack`, so skill names such as `pstack:poteto-mode` are unchanged. Manifests, package names, and docs point at `thisguymartin/pstack-flex`; attribution to open-pstack, pstack-claude, and Cursor pstack stays in README and NOTICE.

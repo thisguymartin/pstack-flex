@@ -8,22 +8,23 @@ Prices and endpoints below were verified 2026-09-25 and drift. Re-verify against
 
 | Kind | Lanes | Auth | Billing | Route |
 | --- | --- | --- | --- | --- |
-| Subscription | `claude:fable`, `claude:opus`, `codex:gpt-6-astra`, `codex:gpt-6-sol`, `codex:gpt-6-luna`, `codex:gpt-5.6-sol`, `grok:grok-4.7` | each CLI's own login | that CLI's plan | native or external per the route table |
+| Subscription | `claude:fable`, `claude:opus`, `codex:gpt-6-astra`, `codex:gpt-6.1-sol`, `codex:gpt-6-sol`, `codex:gpt-6-luna`, `codex:gpt-5.6-sol`, `grok:grok-4.7` | each CLI's own login | that CLI's plan | native or external per the route table |
 | Gateway (flex) | DeepSeek Flash / V4 Pro; MiniMax M3 / M3.1 Flash Preview; any OpenRouter model | API key in the environment | provider billing; preview requires Token Plan | always the external runner |
 
 A gateway lane is the stock `claude` binary env-pointed at the lab's Anthropic-compatible endpoint. There is no custom agent loop and no separate harness: the same runner that spawns Codex and Grok lanes spawns gateway lanes with injected environment. Each provider documents this Claude Code setup itself (DeepSeek: `deepseek-ai/awesome-deepseek-agent`, `docs/claude_code.md`; MiniMax: platform.minimax.io, Claude Code guide; OpenRouter: [Claude Code integration](https://openrouter.ai/docs/guides/guides/claude-code-integration)).
 
 ## GPT-6 Codex families
 
-Three stock Codex families carry the first-run defaults. They use the same ChatGPT login as `codex:gpt-5.6-sol`:
+Three of the four stock GPT-6 Codex families carry the first-run defaults. They use the same ChatGPT login as `codex:gpt-5.6-sol`:
 
 | Family | Descriptor at default requested effort | First-run roles | Codex's own description |
 | --- | --- | --- | --- |
-| astra | `codex:gpt-6-astra@high` | every panel (`arena runners`, `arena cross-judge pool`, `architect runners`, `interrogate reviewers`) | Frontier tier for the most demanding work |
-| sol-6 | `codex:gpt-6-sol@high` | `feature, refactoring`, `bug-fix`, `perf-issue`, `hillclimb` | Coding and everyday workhorse |
+| astra | `codex:gpt-6-astra@high` | every panel (`arena runners`, `arena cross-judge pool`, `interrogate reviewers`) and `architect runners`, where it pairs with Fable | Frontier tier for the most demanding work |
+| sol-6.1 | `codex:gpt-6.1-sol@high` | `feature, refactoring`, `bug-fix`, `perf-issue`, `hillclimb` | Latest workhorse model for coding and everyday work |
+| sol-6 | `codex:gpt-6-sol@high` | none; selectable | Previous generation workhorse model |
 | luna | `codex:gpt-6-luna@high` | `how explorer`, `swarm workers` | Fast, low-cost tier for easier tasks |
 
-A fresh `/setup-pstack` run proposes these. An existing sheet keeps its assignments until you change a named role in setup; `codex:gpt-5.6-sol` remains a selectable family for that. The `sol-6` family is separate from the `sol` family, so each keeps its own effort. All Codex families count as one provider for panel diversity, so Astra plus GPT-6 Sol does not satisfy the two-provider rule; the default panel spans Claude, Codex, and Grok. The route matches Sol: native `spawn_agent` in a Codex parent, and the external runner (`codex exec`) in a Claude Code parent. Codex also lists an `ultra` effort for Astra and GPT-6 Sol. It is outside the pstack effort universe and is not selectable. The descriptions and effort lists come from the Codex CLI 0.157.1 model list, checked 2026-09-27.
+A fresh `/setup-pstack` run proposes these. An existing sheet keeps its assignments until you change a named role in setup; `codex:gpt-5.6-sol` remains a selectable family for that. The `sol-6.1`, `sol-6`, and `sol` families are separate, so each keeps its own effort. All Codex families count as one provider for panel diversity, so Astra plus GPT-6 Sol does not satisfy the two-provider rule; the default panel spans Claude, Codex, and Grok. The route matches Sol: native `spawn_agent` in a Codex parent, and the external runner (`codex exec`) in a Claude Code parent. Codex also lists an `ultra` effort for Astra, GPT-6.1 Sol, and GPT-6 Sol. It is outside the pstack effort universe and is not selectable. The descriptions and effort lists come from the Codex CLI 0.160.0 model list, checked 2026-10-04.
 
 ## Multiple models per provider
 

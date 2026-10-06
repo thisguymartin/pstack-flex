@@ -87,11 +87,11 @@ Daily flow: `pstack-keys -> claude -> /pstack:poteto-mode`. Alternatives, the th
 
 Setup is assignment-first: pick which roles run on which families, answer one effort question per **assigned** family, and only assigned families get probed. Unassigned families are skipped, not errors. Every probe is a real one-turn run — a failed probe writes nothing. Three configurations that make sense:
 
-**A. Full frontier** (Claude + ChatGPT + Grok subs) — accept the defaults. GPT-6 Sol writes code, Luna explores and verifies, and the panel spans three providers:
+**A. Full frontier** (Claude + ChatGPT + Grok subs) — accept the defaults. GPT-6.1 Sol writes code, Luna explores and verifies, and the panel spans three providers:
 
 ```text
-feature, refactoring: codex:gpt-6-sol@high
-bug-fix: codex:gpt-6-sol@high
+feature, refactoring: codex:gpt-6.1-sol@high
+bug-fix: codex:gpt-6.1-sol@high
 how explorer: codex:gpt-6-luna@high
 swarm workers: codex:gpt-6-luna@high
 arena runners: claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max
@@ -248,7 +248,7 @@ pstack's side is the lane journal. While `~/.pstack-flex/lanes/` exists, `pstack
 
 ## The GPT-6 Codex models
 
-`astra` (`codex:gpt-6-astra@high`), `sol-6` (`codex:gpt-6-sol@high`), and `luna` (`codex:gpt-6-luna@high`) are stock families and the first-run defaults: Astra on every panel, GPT-6 Sol on the solo code-writing roles, Luna on exploration and swarm work. They need only your Codex login. Each gets its own effort question and live probe. See [GPT-6 Codex families](LANES.md#gpt-6-codex-families).
+`astra` (`codex:gpt-6-astra@high`), `sol-6.1` (`codex:gpt-6.1-sol@high`), and `luna` (`codex:gpt-6-luna@high`) are stock families and the first-run defaults: Astra on every panel and, with Fable, on architect sketches; GPT-6.1 Sol on the solo code-writing roles; Luna on exploration and swarm work. They need only your Codex login. Each gets its own effort question and live probe. See [GPT-6 Codex families](LANES.md#gpt-6-codex-families).
 
 A sheet written before this release keeps its assignments. To move a role, run `/setup-pstack` and name it; every role you do not change keeps its descriptor, and `codex:gpt-5.6-sol` stays selectable. For example, this row keeps GPT-5.6 Sol on bug fixes while the rest of the sheet takes the new defaults:
 

@@ -39,7 +39,8 @@ Every pstack role (who writes code, who explores, who sits on a review panel) ma
 | `fable` | `claude:fable@max` | Claude Code login | judgment, prose, explanation, hardest tasks, panels |
 | `opus` | `claude:opus@max` | Claude Code login | panels |
 | `astra` | `codex:gpt-6-astra@high` | Codex (ChatGPT) login | panels |
-| `sol-6` | `codex:gpt-6-sol@high` | Codex (ChatGPT) login | feature, refactoring, bug-fix, perf-issue, hillclimb |
+| `sol-6.1` | `codex:gpt-6.1-sol@high` | Codex (ChatGPT) login | feature, refactoring, bug-fix, perf-issue, hillclimb |
+| `sol-6` | `codex:gpt-6-sol@high` | Codex (ChatGPT) login | none; selectable |
 | `luna` | `codex:gpt-6-luna@high` | Codex (ChatGPT) login | how explorer, swarm workers |
 | `sol` | `codex:gpt-5.6-sol@max` | Codex (ChatGPT) login | none; selectable |
 | `grok` | `grok:grok-4.7@xhigh` | Grok CLI login | panels |
@@ -49,7 +50,7 @@ Every pstack role (who writes code, who explores, who sits on a review panel) ma
 | `minimax-preview` | `minimax:MiniMax-M3.1-Flash-Preview@high` | `MINIMAX_API_KEY` (Token Plan) | none; selectable |
 | `openrouter` | `openrouter:<namespace>/<model>@high`, any OpenRouter model | `OPENROUTER_API_KEY` | none; selectable |
 
-The default review panel is `claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max`: four lanes across three providers. Any family can take any role. Panels must span at least two providers, and two models from one provider count as one, because the adversarial signal comes from model diversity. An OpenRouter lane counts as the lab that made its model.
+The default review panel is `claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max`: four lanes across three providers. Architect sketches default to `codex:gpt-6-astra@high, claude:fable@max`. Any family can take any role. Panels must span at least two providers, and two models from one provider count as one, because the adversarial signal comes from model diversity. An OpenRouter lane counts as the lab that made its model.
 
 The DeepSeek, MiniMax, and OpenRouter lanes run the stock `claude` binary against an Anthropic-compatible endpoint with that provider's key, in an isolated config directory, with inherited Anthropic routing stripped. A lane refuses to start if it finds a claude.ai login in that directory, so a subscription credential can never reach a third-party endpoint. Their receipts keep real token usage but set `costUsd` to null (Claude Code prices at Anthropic rates); the price table is in [docs/LANES.md](docs/LANES.md). Anthropic does not support pointing Claude Code at non-Anthropic endpoints; use synthetic data for gateway testing and keep keys in your local environment. Through OpenRouter, a role can use any model in its catalog, such as `openrouter:moonshotai/kimi-k3@high`; setup's live probe on that model is the only gate.
 
@@ -121,7 +122,7 @@ Use pstack:setup-pstack to configure pstack.
 
 Setup is assignment-first. It shows the role map, asks which roles to change, asks one effort per assigned family, probes only those families with a real one-turn run, and writes nothing until every probe passes and you confirm. A fresh run proposes the defaults in the table above. An existing sheet keeps its assignments until you change a named role.
 
-The sheet lives at `~/.claude/pstack-models.md` (Claude Code) or `~/.codex/pstack-models.md` (Codex). It is global, not per project. Change it by rerunning setup rather than editing it by hand, so every choice is probed before it is saved.
+Setup first asks which scope to configure. The global sheet lives at `~/.claude/pstack-models.md` (Claude Code) or `~/.codex/pstack-models.md` (Codex). A project sheet lives at `.claude/pstack-models.md` or `.codex/pstack-models.md` in the repository root. It replaces the global sheet for that project, stays out of git through `.git/info/exclude`, and starts from your global assignments. A project without one uses the global sheet; delete the project sheet to go back. Change either sheet by rerunning setup rather than editing it by hand, so every choice is probed before it is saved.
 
 A model sheet from an earlier release keeps its panel. To take the new defaults, delete those role lines and run setup again; setup fills missing roles from the defaults. A `grok:grok-4.6` entry keeps running until the next setup run asks you to replace it.
 
