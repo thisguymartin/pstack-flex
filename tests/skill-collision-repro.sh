@@ -124,6 +124,28 @@ else
 fi
 
 plugin="$repo/plugins/pstack"
+# Claude must receive the shared skill before the agent's first action (#41).
+agent="$plugin/agents/poteto-agent.md"
+agent_front="$(sed -n '2,/^---$/p' "$agent")"
+if ! printf '%s\n' "$agent_front" | grep -Fxq 'skills:' ||
+   ! printf '%s\n' "$agent_front" | grep -Fxq '  - pstack:poteto-mode'; then
+  note "FAIL: poteto-agent must preload the namespaced poteto-mode skill"
+  fail=1
+elif [ ! -f "$plugin/skills/poteto-mode/SKILL.md" ] ||
+     sed -n '2,/^---$/p' "$plugin/skills/poteto-mode/SKILL.md" | grep -q '^disable-model-invocation: true$'; then
+  note "FAIL: poteto-agent preload must resolve to the model-readable shared skill"
+  fail=1
+else
+  note "ok: poteto-agent declares the shared poteto-mode preload"
+fi
+if ! awk '/^---$/ { delimiters++; next } delimiters >= 2 { print }' "$agent" |
+     grep -Fq 'in full before doing any work, including its inline Principles index.'; then
+  note "FAIL: poteto-agent must retain the full-read instruction"
+  fail=1
+else
+  note "ok: poteto-agent retains the full-read instruction"
+fi
+
 canon="$plugin/skills/poteto-mode/references/bugbot-triage.md"
 skill="$plugin/skills/babysit/SKILL.md"
 playbook="$plugin/skills/poteto-mode/playbooks/babysit.md"
