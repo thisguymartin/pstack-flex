@@ -9,6 +9,7 @@ The latest imported open-pstack release is v1.5.0 at `77a91fd6f75483b971fa5cca4a
 | Component | Source | Copyright | License file |
 | --- | --- | --- | --- |
 | Shared pstack skills, principles, playbooks, agents, scripts, and assets | [Cursor pstack at the current content pin](https://github.com/cursor/plugins/tree/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack) | 2026 Lauren Tan | [LICENSE](LICENSE) |
+| Fresh-agent guidance and swarm respawn wording | [Cursor pstack at `23e4138daa01`](https://github.com/cursor/plugins/commit/23e4138daa01), selectively imported for #45 | 2026 Lauren Tan | [LICENSE](LICENSE) |
 | `correct` skill | [Cursor correct at `df58112`](https://github.com/cursor/plugins/blob/df58112/pstack/skills/correct/SKILL.md), selectively imported for #42 | 2026 Lauren Tan | [LICENSE](LICENSE) |
 | `deslop`, `thermo-nuclear-code-quality-review`, `make-pr-easy-to-review`, `fix-ci`, `fix-merge-conflicts`, `get-pr-comments`, and `what-did-i-get-done` skills | [Cursor Team Kit at the import pin](https://github.com/cursor/plugins/tree/e46364b8be46000b7df0f260550cd712afbb8d36/cursor-team-kit/skills) | 2026 Cursor | [LICENSE-cursor-team-kit](LICENSE-cursor-team-kit) |
 | `plugins/pstack/hooks/run-hook.cmd` | [Superpowers in the official Claude plugin repository](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/superpowers), imported at 6.1.0, originally obra/superpowers | 2025 Jesse Vincent | [LICENSE-superpowers](LICENSE-superpowers) |

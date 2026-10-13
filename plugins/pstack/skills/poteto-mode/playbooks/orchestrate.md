@@ -22,7 +22,7 @@ Depth stays at coordinator, track, worker. Author the track decomposition per pr
 
 Create `~/.claude/orchestrate/<project-slug>/`, outside the repo and outside the session. The store has to outlive this chat: the program runs for days, a session restart is expected (see Liveness and failure), and the store is the postmortem. The session scratchpad is not a candidate, however convenient; it is session-scoped and temporary, so a restart takes the program's only state with it. Every file has exactly one writer. Owners publish facts, readers aggregate at read time. Use `bun skills/poteto-mode/scripts/orch/orch.ts` under the installed plugin for bookkeeping, written below as `orch`, while its canonical plain TSV and JSON stay readable without the CLI.
 
-- `preferences.md` is the standing-orders register: numbered lines, one constraint each (model policy, stack shape and count, verification bar, forbidden paths, escalation policy). Paste it verbatim into every spawn and every resume. Directives decay across resumes, and each dropped one costs a human turn. When you catch yourself restating an instruction, append the line before you act (principle-encode-lessons-in-structure).
+- `preferences.md` is the standing-orders register: numbered lines, one constraint each (model policy, stack shape and count, verification bar, forbidden paths, escalation policy). Paste it verbatim into every spawn and every justified continuation under poteto-mode's costly-state exception. Directives decay across resumes, and each dropped one costs a human turn. When you catch yourself restating an instruction, append the line before you act (principle-encode-lessons-in-structure).
 - `overview.md` is the durable PR and issue DB. Append. Never rewrite wholesale per event.
 - `units.tsv` has one row per unit: id, track, state, branch, PR, head SHA, brief path. Update rows in place.
 - `frontier.json` is the computed merge frontier, per Stack safety.
@@ -50,7 +50,7 @@ REPORT       status, branch, head SHA, PRs, verdict, what you actually ran, devi
 STANDING     <preferences.md pasted verbatim>
 ```
 
-Size the brief to the unit. A one-command unit gets the template collapsed to a paragraph that still names goal, scope, the verify command, and the report shape. A 4KB scaffold around a two-line edit costs more to write and obey than the edit. A spawn may reference the standing-orders file by store path. Verbatim paste is for every resume and for any brief that has to stand alone.
+Size the brief to the unit. A one-command unit gets the template collapsed to a paragraph that still names goal, scope, the verify command, and the report shape. A 4KB scaffold around a two-line edit costs more to write and obey than the edit. A spawn may reference the standing-orders file by store path. Verbatim paste is for every justified continuation and for any brief that has to stand alone.
 
 A sub-coordinator brief adds its track boundary and unit list, its spawn budget, the drain protocol, and the rollup format (per child: name, status, PR, head SHA, verdict, one line, plus track status and frontier delta).
 
@@ -95,7 +95,7 @@ A unit is not done until its output is externalized the moment it lands, never b
 
 - Never resume an agent to check on it. A resume restarts an idle agent. Probe read-only: the ledger, `units.tsv`, `gh`, pushed branches, and the background task list. Transcript mtime is not liveness.
 - A silent death gets a synthetic postmortem row in the inbox (unit, failure mode, last evidence, options). Replan on evidence as it arrives. Never wait for full quiescence.
-- Retry by mode: cap-hit or oom, respawn with smaller scope. Network-drop, retry as-is. Tool-error, retry on a different model. Unknown, retry once. Two retries, then abandon the unit and replan around it.
+- Every fix round, retry, and next queue item starts a fresh worker with consolidated scope, later directives, the prior report, and the branch and worktree path. Apply the costly-state exception and writer handoff in the harness mapping. Retry by mode: cap-hit or oom, respawn with smaller scope. Network-drop, respawn with the same scope. Tool-error, name the failed tool and correct the cause before respawning on the assigned route. Unknown, respawn once. Never substitute a model to recover a dropout. Two retries, then abandon the unit and replan around it.
 - A zombie that returns hours late reconciles against the current frontier and ledger before anything is accepted. Salvage unique findings through a fresh unit, never a blind merge.
 - When continued spawning would produce garbage tree-wide (bad upstream output, broken acceptance, dead infra), write a stop line at the top of the standing orders, let in-flight work finish, fix the cause, clear it.
 - Bound your own infra retries the same way you bound a child's. After a few consecutive tool aborts, stop retrying. Write a terminal handoff to durable state (what is done, where it lives, the exact command to resume) and end the run.
