@@ -8,6 +8,7 @@ import {
   statSync,
   unlinkSync,
   writeFileSync,
+  writeSync,
 } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { OMP_VERSION, supportedOmpVersion } from "../omp/adapter.ts";
@@ -76,15 +77,36 @@ function reserve(path: string): void {
   closeSync(descriptor);
 }
 
-function reserveOutputs(options: RunnerOptions): void {
-  if (options.outputPath === options.receiptPath) {
-    throw new UsageError("output and receipt paths must differ");
+interface ModelStreams {
+  readonly stdout: number;
+  readonly stderr: number;
+}
+
+function modelStreamPaths(receiptPath: string): { stdoutPath: string; stderrPath: string } {
+  return { stdoutPath: `${receiptPath}.stdout`, stderrPath: `${receiptPath}.stderr` };
+}
+
+function reserveOutputs(options: RunnerOptions): ModelStreams {
+  const { stdoutPath, stderrPath } = modelStreamPaths(options.receiptPath);
+  const paths = [options.outputPath, options.receiptPath, stdoutPath, stderrPath];
+  const resolved = paths.map((path) => resolve(path));
+  if (new Set(resolved).size !== paths.length || resolved.includes(resolve(options.promptPath))) {
+    throw new UsageError("prompt, output, receipt, and stream paths must be distinct");
   }
-  reserve(options.outputPath);
+  const created: string[] = [];
+  let stdout: number | null = null;
   try {
-    reserve(options.receiptPath);
+    for (const path of paths.slice(0, 2)) {
+      reserve(path);
+      created.push(path);
+    }
+    stdout = openSync(stdoutPath, "wx", 0o600);
+    created.push(stdoutPath);
+    const stderr = openSync(stderrPath, "wx", 0o600);
+    return { stdout, stderr };
   } catch (error) {
-    removeIfExists(options.outputPath);
+    if (stdout !== null) closeSync(stdout);
+    for (const path of created) removeIfExists(path);
     throw error;
   }
 }
@@ -178,7 +200,8 @@ interface StreamCapture {
 
 function captureStream(
   stream: ReadableStream<Uint8Array>,
-  onChunk?: (chunk: Uint8Array) => void
+  onChunk?: (chunk: Uint8Array) => void,
+  descriptor?: number
 ): StreamCapture {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -190,6 +213,14 @@ function captureStream(
       while (true) {
         const next = await reader.read();
         if (next.done) break;
+        if (descriptor !== undefined) {
+          let offset = 0;
+          while (offset < next.value.byteLength) {
+            const written = writeSync(descriptor, next.value, offset, next.value.byteLength - offset);
+            if (written === 0) throw new Error("stream file write made no progress");
+            offset += written;
+          }
+        }
         onChunk?.(next.value);
         text += decoder.decode(next.value, { stream: true });
       }
@@ -230,7 +261,8 @@ async function runProcess(
   prompt: string,
   deadlineAt: number | null,
   cancellation: RunCancellation,
-  onStdout?: (chunk: Uint8Array) => void
+  onStdout?: (chunk: Uint8Array) => void,
+  streamFiles?: ModelStreams
 ): Promise<ProcessResult> {
   const child = Bun.spawn([executable, ...spec.args], {
     cwd,
@@ -240,8 +272,8 @@ async function runProcess(
     stderr: "pipe",
   });
   let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
-  const stdoutCapture = captureStream(child.stdout, onStdout);
-  const stderrCapture = captureStream(child.stderr);
+  const stdoutCapture = captureStream(child.stdout, onStdout, streamFiles?.stdout);
+  const stderrCapture = captureStream(child.stderr, undefined, streamFiles?.stderr);
   const streams = Promise.all([stdoutCapture.result, stderrCapture.result]);
   const exited = child.exited.then((exitCode): ProcessEvent => ({
     kind: "exited",
@@ -272,7 +304,7 @@ async function runProcess(
       stdin.end();
     }
 
-    const completions = [exited, cancelled];
+    const completions = [exited, cancelled, streams.then(() => exited)];
     if (deadline !== null) completions.push(deadline);
     const first = await Promise.race(completions);
 
@@ -513,7 +545,7 @@ function modelProof(
 
 function completeReceipt(
   options: RunnerOptions,
-  partial: Omit<RunnerReceipt, "schemaVersion" | "parent" | "provider" | "model" | "effort" | "mode" | "cwd" | "promptPath" | "outputPath">
+  partial: Omit<RunnerReceipt, "schemaVersion" | "parent" | "provider" | "model" | "effort" | "mode" | "cwd" | "promptPath" | "outputPath" | "stdoutPath" | "stderrPath">
 ): RunnerReceipt {
   return {
     schemaVersion: 1,
@@ -525,6 +557,7 @@ function completeReceipt(
     cwd: options.cwd,
     promptPath: options.promptPath,
     outputPath: options.outputPath,
+    ...modelStreamPaths(options.receiptPath),
     ...partial,
   };
 }
@@ -584,7 +617,8 @@ async function executeLane(
   invocation: CommandSpec,
   preflight: CommandSpec,
   progress: LaneProgress,
-  tap: LaneTap
+  tap: LaneTap,
+  streamFiles: ModelStreams
 ): Promise<RunResult> {
   const startedAt = new Date(started).toISOString();
   const prompt = readFileSync(options.promptPath, "utf8");
@@ -833,7 +867,8 @@ async function executeLane(
     prompt,
     deadlineAt,
     cancellation,
-    tap.stdout
+    tap.stdout,
+    streamFiles
   );
   const completed = Date.now();
   const base = {
@@ -948,8 +983,9 @@ export async function runLane(
     argv: [invocation.command, ...invocation.args],
   };
   const cancellation = installRunCancellation();
+  let streamFiles: ModelStreams | null = null;
   try {
-    reserveOutputs(options);
+    streamFiles = reserveOutputs(options);
     const tap = openLaneJournal(options, started);
     try {
       const result = await executeLane(
@@ -960,7 +996,8 @@ export async function runLane(
         invocation,
         preflight,
         progress,
-        tap
+        tap,
+        streamFiles
       );
       tap.finish(result.receipt);
       return result;
@@ -1008,6 +1045,13 @@ export async function runLane(
     }
   } finally {
     cancellation.dispose();
+    if (streamFiles !== null) {
+      try {
+        closeSync(streamFiles.stdout);
+      } finally {
+        closeSync(streamFiles.stderr);
+      }
+    }
   }
 }
 
