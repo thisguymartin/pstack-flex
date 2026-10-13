@@ -15,6 +15,7 @@
     "harnesses.ts",
     "configuration*.ts",
     "context.ts",
+    "omp/**/*.ts",
     "runner/*.ts"
   ]
 }

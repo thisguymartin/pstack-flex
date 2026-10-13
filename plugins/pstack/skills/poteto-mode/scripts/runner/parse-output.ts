@@ -3,6 +3,7 @@ import type {
   ParsedOutput,
   Provider,
 } from "./types.ts";
+import { parseOmpOutput } from "../omp/adapter.ts";
 import { isGatewayProvider } from "./types.ts";
 import {
   concreteModelMatchesRollingAlias,
@@ -240,6 +241,8 @@ export function parseProviderOutput(
     return { ...parsed, costUsd: null };
   }
   switch (provider) {
+    case "omp":
+      return parseOmpOutput(stdout, requestedModel);
     case "claude":
       return parseClaude(stdout, requestedModel);
     case "codex":
@@ -253,7 +256,7 @@ export function parseProviderOutput(
 
 // These CLIs omit a trustworthy model report; their receipts retain pinned argv.
 export function acceptsUnreportedModel(provider: Provider): boolean {
-  return provider === "codex" || provider === "opencode" || isGatewayProvider(provider);
+  return provider === "omp" || provider === "codex" || provider === "opencode" || isGatewayProvider(provider);
 }
 
 export function reportedModelMatches(

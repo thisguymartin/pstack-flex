@@ -1,0 +1,33 @@
+{
+  "retry": {
+    "enabled": false,
+    "modelFallback": false
+  },
+  "task": {
+    "softRequestBudget": 0,
+    "maxRuntimeMs": 0,
+    "speculativeLaunch": false,
+    "completionProbe": false
+  },
+  "compaction": {
+    "enabled": false
+  },
+  "memories": {
+    "enabled": false
+  },
+  "mcp": {
+    "enableProjectConfig": false
+  },
+  "async": {
+    "enabled": false
+  },
+  "advisor": {
+    "enabled": false
+  },
+  "externalThinking": false,
+  "edit": {
+    "autoRepair": {
+      "enabled": false
+    }
+  }
+}

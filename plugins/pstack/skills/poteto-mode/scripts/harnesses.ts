@@ -1,3 +1,4 @@
+import { ompHarness } from "./omp/harness.ts";
 import type { Provider } from "./runner/types.ts";
 
 interface Harness {
@@ -7,7 +8,7 @@ interface Harness {
   readonly configDirectoryVariable: string;
   readonly configDirectorySuffix: string;
   readonly projectDirectory: string;
-  readonly integration: "include" | "mirror-block" | "instructions-array";
+  readonly integration: "include" | "mirror-block" | "instructions-array" | "launch";
   readonly integrationFiles: readonly string[];
   readonly launch: "task" | "session" | "detached";
   readonly sessionVariable: string | null;
@@ -15,6 +16,7 @@ interface Harness {
 }
 
 export const HARNESSES = [
+  ompHarness,
   {
     id: "claude",
     nativeProvider: "claude",

@@ -2,7 +2,7 @@ import { parseArgs as parseNodeArgs } from "node:util";
 import { resolvedOptions, runLane } from "./run.ts";
 import {
   ACCESS_MODES,
-  EFFORTS,
+  ALL_EFFORTS,
   PARENTS,
   PROVIDERS,
   type AccessMode,
@@ -105,7 +105,7 @@ export function parseArgs(argv: readonly string[]): RunnerOptions | null {
     parent: oneOf("parent", stringValue(parsed.values.parent), PARENTS) as Parent,
     provider: oneOf("provider", stringValue(parsed.values.provider), PROVIDERS) as Provider,
     model: required("model", stringValue(parsed.values.model)),
-    effort: oneOf("effort", stringValue(parsed.values.effort), EFFORTS) as Effort,
+    effort: oneOf("effort", stringValue(parsed.values.effort), ALL_EFFORTS) as Effort,
     mode,
     promptPath: required("prompt", stringValue(parsed.values.prompt)),
     cwd: required("cwd", stringValue(parsed.values.cwd)),

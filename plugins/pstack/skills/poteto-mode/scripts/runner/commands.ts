@@ -5,6 +5,7 @@ import type {
   RunnerOptions,
 } from "./types.ts";
 import { isGatewayProvider } from "./types.ts";
+import { ompCommand } from "../omp/adapter.ts";
 import { openCodeLane, openCodeProviderId } from "./opencode-lane.ts";
 
 export interface CommandSpec {
@@ -24,6 +25,8 @@ export function preflightCommand(provider: Provider, model: string): CommandSpec
     return { command: "claude", args: ["--version"], stdin: "none" };
   }
   switch (provider) {
+    case "omp":
+      return { command: "omp", args: ["--version"], stdin: "none" };
     case "claude":
       return {
         command: "claude",
@@ -112,6 +115,8 @@ export function invocationCommand(options: RunnerOptions): CommandSpec {
   // injected environment (endpoint, token, isolated CLAUDE_CONFIG_DIR).
   if (isGatewayProvider(options.provider)) return claudeInvocation(options);
   switch (options.provider) {
+    case "omp":
+      return ompCommand(options);
     case "claude":
       return claudeInvocation(options);
     case "codex":

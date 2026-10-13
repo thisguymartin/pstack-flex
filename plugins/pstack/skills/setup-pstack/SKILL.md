@@ -5,6 +5,8 @@ description: Configure pstack's provider-qualified models, per-family requested 
 
 # Setup pstack
 
+For an OMP parent, use the OMP-only setup rules in `poteto-mode/references/codex-tools.md` and `docs/OMP.md`. Choose exact `omp:<provider>/<model>@<effort>` assignments from the user's existing OMP catalog. Do not seed Claude/Codex/Grok CLI defaults, use inherited roles, or translate model IDs by guesswork. Ask which roles and exact models to assign, probe each pair through the OMP runner, then write only the selected model sheet after confirmation. Preserve credentials. OMP workers cannot run shell commands; the parent handles verification. The remaining family matrices describe the other runtimes and do not limit the OMP catalog.
+
 Configure one portable model sheet for the current parent harness, globally or privately for one project. Read [provider dispatch](../poteto-mode/references/provider-dispatch.md) for model families and [harness integration](../poteto-mode/references/codex-tools.md) for tool and configuration recipes. One family is one `(provider, model)` pair with one requested effort. The model sheet is the only mutable configuration source. No weaker-model fallback.
 
 ## Steps

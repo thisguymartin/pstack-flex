@@ -833,8 +833,9 @@ describe("runLane", () => {
     const input = options("claude", "preflight-cancelled");
     const started = join(scratch, "preflight-child.started");
     const terminated = join(scratch, "preflight-child.terminated");
-    const isolatedRunner = join(scratch, "isolated-runner");
+    const isolatedRunner = join(scratch, "runner");
     cpSync(import.meta.dir, isolatedRunner, { recursive: true });
+    cpSync(join(import.meta.dir, "../omp"), join(scratch, "omp"), { recursive: true });
     cpSync(join(import.meta.dir, "../harnesses.ts"), join(scratch, "harnesses.ts"));
     const runner = Bun.spawn([
       process.execPath,

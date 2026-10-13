@@ -1,8 +1,10 @@
+import { OMP_EXTRA_EFFORTS } from "../omp/policy.ts";
 export { PARENTS, type Parent } from "../harnesses.ts";
 import type { Parent } from "../harnesses.ts";
 export const GATEWAY_PROVIDERS = ["deepseek", "minimax", "openrouter"] as const;
-export const PROVIDERS = ["claude", "codex", "grok", "opencode", ...GATEWAY_PROVIDERS] as const;
+export const PROVIDERS = ["claude", "codex", "grok", "opencode", "omp", ...GATEWAY_PROVIDERS] as const;
 export const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+export const ALL_EFFORTS = [...OMP_EXTRA_EFFORTS, ...EFFORTS] as const;
 export const ACCESS_MODES = ["read-only", "isolated-write"] as const;
 
 export type Provider = (typeof PROVIDERS)[number];
@@ -14,10 +16,10 @@ export function isGatewayProvider(provider: Provider): provider is GatewayProvid
 
 export function laneCapabilities(provider: Provider) {
   return {
-    shell: provider !== "opencode",
+    shell: provider !== "opencode" && provider !== "omp",
   };
 }
-export type Effort = (typeof EFFORTS)[number];
+export type Effort = (typeof ALL_EFFORTS)[number];
 export type AccessMode = (typeof ACCESS_MODES)[number];
 
 export interface RunnerOptions {
