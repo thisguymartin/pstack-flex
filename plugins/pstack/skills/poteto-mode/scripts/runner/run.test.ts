@@ -317,6 +317,98 @@ afterEach(() => {
   rmSync(scratch, { recursive: true, force: true });
 });
 
+describe("retained model streams", () => {
+  for (const failure of [false, true]) {
+    it(`retains complete private streams on ${failure ? "failure" : "success"} with the journal`, async () => {
+      const input = options("claude");
+      const root = join(scratch, "lanes");
+      mkdirSync(root);
+      process.env.PSTACK_FLEX_LANES_DIR = root;
+      const stdout = failure
+        ? Buffer.from("synthetic failure " + "x".repeat(12_000) + "\n")
+        : Buffer.from(JSON.stringify({ result: "ok", modelUsage: { "claude-fable-9-9": {} }, padding: "x".repeat(12_000) }) + "\n");
+      const stderr = Buffer.concat([Buffer.from("synthetic diagnostic " + "y".repeat(12_000)), Buffer.from([0, 255, 10])]);
+      writeFileSync(join(bin, "claude"), fake.replace('const modelIndex =',
+        `process.stdout.write(Buffer.from("${stdout.toString("base64")}", "base64"));
+process.stderr.write(Buffer.from("${stderr.toString("base64")}", "base64"));
+process.exit(${failure ? 1 : 0});
+const modelIndex =`));
+      const result = await runLane(input);
+      expect(result.receipt.status).toBe(failure ? "child-failed" : "complete");
+      const saved = receipt(input.receiptPath);
+      expect(saved.stdoutPath).toBe(`${input.receiptPath}.stdout`);
+      expect(saved.stderrPath).toBe(`${input.receiptPath}.stderr`);
+      expect(readFileSync(saved.stdoutPath)).toEqual(stdout);
+      expect(readFileSync(saved.stderrPath)).toEqual(stderr);
+      for (const path of [saved.stdoutPath, saved.stderrPath]) {
+        expect(statSync(path).mode & 0o777).toBe(0o600);
+      }
+      if (failure) expect(saved.error?.evidence.length).toBeLessThanOrEqual(4_000);
+      const lane = join(root, readdirSync(root)[0]!);
+      expect(readFileSync(join(lane, "stream.jsonl"))).toEqual(stdout);
+      expect(receipt(join(lane, "receipt.json")).stdoutPath).toBe(saved.stdoutPath);
+    });
+  }
+
+  for (const extension of ["stdout", "stderr"]) {
+    it(`preserves an existing ${extension} artifact and rolls back reservations`, async () => {
+      const input = options("claude");
+      const path = `${input.receiptPath}.${extension}`;
+      writeFileSync(path, "existing artifact");
+      await expect(runLane(input)).rejects.toThrow();
+      expect(readFileSync(path, "utf8")).toBe("existing artifact");
+      expect(existsSync(input.outputPath)).toBe(false);
+      expect(existsSync(input.receiptPath)).toBe(false);
+      if (extension === "stderr") expect(existsSync(`${input.receiptPath}.stdout`)).toBe(false);
+    });
+  }
+
+  it("rejects output and prompt collisions with derived stream paths", async () => {
+    const input = options("claude");
+    await expect(runLane({ ...input, outputPath: `${input.receiptPath}.stdout` })).rejects.toThrow("paths must be distinct");
+    const promptPath = `${input.receiptPath}.stderr`;
+    writeFileSync(promptPath, "synthetic prompt");
+    await expect(runLane({ ...input, promptPath })).rejects.toThrow("paths must be distinct");
+    expect(readFileSync(promptPath, "utf8")).toBe("synthetic prompt");
+    expect(existsSync(input.receiptPath)).toBe(false);
+  });
+
+  for (const termination of ["cancelled", "timed-out"] as const) {
+    it(`retains bytes emitted before the lane is ${termination}`, async () => {
+      const input = { ...options("codex"), timeoutMs: termination === "timed-out" ? 1_500 : null };
+      const started = join(scratch, "stream-child.started");
+      const terminated = join(scratch, "stream-child.terminated");
+      writeFileSync(join(bin, "codex"), fake.replace('if (cancelStage === stage) {',
+        'if (cancelStage === stage) { process.stdout.write("synthetic progress\\n"); process.stderr.write("synthetic warning\\n");'));
+      const child = Bun.spawn([process.execPath, ...runnerArgs(input)], {
+        cwd: scratch,
+        env: { ...process.env, FAKE_CANCEL_STAGE: "model", FAKE_STARTED_PATH: started, FAKE_TERMINATED_PATH: terminated },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const stdout = new Response(child.stdout).text();
+      const stderr = new Response(child.stderr).text();
+      await waitFor(started);
+      if (termination === "cancelled") child.kill("SIGTERM");
+      expect(await exitWithin(child, 3_000)).toBe(termination === "cancelled" ? 130 : 124);
+      await Promise.all([stdout, stderr]);
+      const saved = receipt(input.receiptPath);
+      expect(saved.status).toBe(termination);
+      expect(readFileSync(saved.stdoutPath, "utf8")).toBe("synthetic progress\n");
+      expect(readFileSync(saved.stderrPath, "utf8")).toBe("synthetic warning\n");
+    });
+  }
+
+  it("keeps empty stream artifacts when preflight fails", async () => {
+    const input = options("grok");
+    process.env.FAKE_GROK_UNAUTH = "1";
+    const result = await runLane(input);
+    expect(result.receipt.status).toBe("unauthenticated");
+    expect(readFileSync(result.receipt.stdoutPath).length).toBe(0);
+    expect(readFileSync(result.receipt.stderrPath).length).toBe(0);
+  }, 10_000);
+});
+
 describe("runLane", () => {
   for (const provider of ["claude", "codex", "grok"] as const) {
     it(`executes and receipts the ${provider} external lane`, async () => {

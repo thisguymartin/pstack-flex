@@ -75,6 +75,8 @@ export interface RunnerReceipt {
   readonly cwd: string;
   readonly promptPath: string;
   readonly outputPath: string;
+  readonly stdoutPath: string;
+  readonly stderrPath: string;
   readonly startedAt: string;
   readonly completedAt: string;
   readonly elapsedMs: number;

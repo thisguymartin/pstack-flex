@@ -141,7 +141,7 @@ The runner and its preflight have no implicit timeout. Do not invent a duration 
 
 Read-only mode maps to Claude plan mode with project-only settings and an explicit tool list, Codex's read-only sandbox, and Grok plan mode plus its `read-only` sandbox and read-oriented tool list. Grok's built-in read-only profile deliberately keeps its own state and system temporary directories writable, so point a read-only Grok lane at the actual checkout rather than a worktree under `/tmp`, `/var/tmp`, or the host's temporary directory. `isolated-write` maps to Claude `acceptEdits` with project-only settings, Codex `workspace-write`, and Grok `acceptEdits` plus its `workspace` sandbox and write-capable tool list. Give every writer only a dedicated worktree or output directory. Never route a writer into the primary checkout.
 
-Every concurrent external lane needs distinct prompt, output, and receipt paths. The launcher reserves output and receipt paths exclusively and refuses to overwrite them.
+Every concurrent external lane needs distinct prompt, output, receipt, and derived stream paths. The launcher exclusively reserves the output, receipt, `<receipt>.stdout`, and `<receipt>.stderr` files and refuses collisions or existing artifacts. It retains raw model-process stdout and stderr on success and failure, with private `0600` permissions, and records `stdoutPath` and `stderrPath` in the receipt. Runs that stop before model execution retain empty stream files; preflight evidence stays in the receipt. These files are independent of the optional lane journal. Keep them private alongside the receipt because provider output can contain task data.
 
 ## Completion and dropouts
 
