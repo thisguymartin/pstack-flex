@@ -94,6 +94,10 @@ git log --oneline 77a91fd6f75483b971fa5cca4a88f1337f6099dd..upstream/main
 
 There is no generated README snapshot or parallel skill tree to refresh. Git retains prior content and the complete import history.
 
+## Selected content imports
+
+`skills/correct/SKILL.md` imports [Cursor's correct skill at `df58112`](https://github.com/cursor/plugins/blob/df58112/pstack/skills/correct/SKILL.md) for [#42](https://github.com/thisguymartin/pstack-flex/issues/42). It retains the architecture -> types/checks -> behavior tests -> judgment-call docs order and past-mistake proof. The fork defaults to the current task or branch, requires two distinct occurrences, and follows the surrounding request's commit authorization. It uses shared invocation metadata and the existing harness tools boundary. This selective import does not advance the full content pin above.
+
 ## OMP candidate
 
 OMP implementation belongs in `plugins/pstack/skills/poteto-mode/scripts/omp/`. Keep the public `scripts/pstack-omp` wrapper and shared registration/dispatch calls at their existing boundaries. Do not copy shared skills into the OMP directory.
