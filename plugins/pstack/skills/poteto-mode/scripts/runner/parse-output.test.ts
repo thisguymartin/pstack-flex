@@ -2,6 +2,77 @@ import { describe, expect, it } from "bun:test";
 import { parseProviderOutput, reportedModelMatches } from "./parse-output.ts";
 
 describe("parseProviderOutput", () => {
+  const claudeRoutes = [
+    { provider: "claude", model: "fable", reported: "claude-fable-9-9", costUsd: 0.03 },
+    { provider: "deepseek", model: "deepseek-flash", reported: "DeepSeek-Flash-0731", costUsd: null },
+    { provider: "minimax", model: "MiniMax-M3", reported: "minimax-m3", costUsd: null },
+    { provider: "openrouter", model: "z-ai/glm-5.3", reported: "Z-AI/GLM-5.3", costUsd: null },
+  ] as const;
+
+  for (const { provider, model, reported, costUsd } of claudeRoutes) {
+    it(`extracts the last result and its metadata through ${provider}`, () => {
+      const terminal = {
+        type: "result", is_error: false, result: "FINAL_OK",
+        session_id: "terminal-session",
+        usage: { input_tokens: 14, output_tokens: 4, cache_read_input_tokens: 2 },
+        total_cost_usd: 0.03,
+        modelUsage: { "side-model": {}, [reported]: {} },
+      };
+      for (const raw of [terminal, [
+        { type: "system", model: "unrelated-model" },
+        { type: "result", is_error: true, result: "earlier error", session_id: "earlier-session" },
+        { type: "result", result: "earlier success" },
+        null, "text", 42, [],
+        { type: "assistant", result: "progress" },
+        terminal,
+        { type: "system", result: "not a result event" },
+      ]]) {
+        const parsed = parseProviderOutput(provider, JSON.stringify(raw), "", model);
+        expect(parsed).toMatchObject({
+          text: "FINAL_OK", reportedModel: reported, sessionId: "terminal-session",
+          usage: { inputTokens: 14, outputTokens: 4, cachedInputTokens: 2 }, costUsd,
+        });
+        expect(reportedModelMatches(provider, model, parsed.reportedModel)).toBe(true);
+      }
+    });
+
+    it(`rejects terminal errors before partial or missing text through ${provider}`, () => {
+      for (const result of ["partial text", undefined, "", 42]) {
+        const terminal = { type: "result", is_error: true, result };
+        for (const raw of [terminal, [{ type: "result", result: "earlier success" }, terminal]]) {
+          expect(() => parseProviderOutput(provider, JSON.stringify(raw), "", model))
+            .toThrow("claude reported an error result");
+        }
+      }
+    });
+
+    it(`rejects arrays without a result event through ${provider}`, () => {
+      for (const raw of [[], [null, "text", 42, []], [{ type: "assistant", result: "progress" }]]) {
+        expect(() => parseProviderOutput(provider, JSON.stringify(raw), "", model))
+          .toThrow("claude result did not contain a terminal event");
+      }
+    });
+
+    it(`rejects final results without text through ${provider}`, () => {
+      for (const result of [undefined, "", 42]) {
+        const terminal = { type: "result", is_error: false, result };
+        for (const raw of [terminal, [{ type: "result", result: "earlier success" }, terminal]]) {
+          expect(() => parseProviderOutput(provider, JSON.stringify(raw), "", model))
+            .toThrow("claude result did not contain final text");
+        }
+      }
+    });
+
+    it(`rejects invalid JSON and non-object output through ${provider}`, () => {
+      expect(() => parseProviderOutput(provider, "not-json", "", model))
+        .toThrow("claude did not emit valid JSON");
+      for (const raw of [null, "text", 42]) {
+        expect(() => parseProviderOutput(provider, JSON.stringify(raw), "", model))
+          .toThrow("claude emitted a non-object result");
+      }
+    });
+  }
+
   it("extracts Claude text, model, usage, cost, and session", () => {
     const parsed = parseProviderOutput(
       "claude",
