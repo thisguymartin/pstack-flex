@@ -550,7 +550,7 @@ describe("runLane", () => {
     const transientMarker = join(scratch, "grok-cancel-unauth.pid");
     const preflightLog = join(scratch, "grok-cancel-unauth.log");
     const input = options("grok", "grok-preflight-retry-cancelled");
-    const runner = Bun.spawn([process.execPath, ...runnerArgs(input)], {
+    const runner = Bun.spawn(runnerArgs(input), {
       cwd: scratch,
       env: {
         ...process.env,
@@ -609,7 +609,7 @@ describe("runLane", () => {
   it("does not spawn the model when preflight exhausts the wrapper deadline", async () => {
     const modelStarted = join(scratch, "deadline-model.started");
     const input = { ...options("claude", "preflight-deadline"), timeoutMs: 300 };
-    const runner = Bun.spawn([process.execPath, ...runnerArgs(input)], {
+    const runner = Bun.spawn(runnerArgs(input), {
       cwd: scratch,
       env: {
         ...process.env,
@@ -634,7 +634,7 @@ describe("runLane", () => {
 
   it("lets a delayed wrapper lane finish when timeout is omitted", async () => {
     const input = options("claude", "unbounded-default");
-    const runner = Bun.spawn([process.execPath, ...runnerArgs(input)], {
+    const runner = Bun.spawn(runnerArgs(input), {
       cwd: scratch,
       env: { ...process.env, FAKE_MODEL_DELAY_MS: "400" },
       stdout: "pipe",
@@ -657,7 +657,7 @@ describe("runLane", () => {
       ...options("claude", "long-runtime-deadline"),
       timeoutMs: 2_147_483_648,
     };
-    const runner = Bun.spawn([process.execPath, ...runnerArgs(input)], {
+    const runner = Bun.spawn(runnerArgs(input), {
       cwd: scratch,
       env: { ...process.env, FAKE_MODEL_DELAY_MS: "100" },
       stdout: "pipe",
@@ -720,7 +720,7 @@ describe("runLane", () => {
   it("bounds a descendant-held pipe by the explicit deadline without fabricating a signal", async () => {
     const descendantPidPath = join(scratch, "deadline-descendant.pid");
     const input = { ...options("claude", "deadline-drain"), timeoutMs: 700 };
-    const runner = Bun.spawn([process.execPath, ...runnerArgs(input)], {
+    const runner = Bun.spawn(runnerArgs(input), {
       cwd: scratch,
       env: {
         ...process.env,
@@ -751,7 +751,7 @@ describe("runLane", () => {
   it("does not claim a signal was sent to an already signal-reaped child", async () => {
     const descendantPidPath = join(scratch, "signalled-descendant.pid");
     const input = { ...options("claude", "signalled-drain"), timeoutMs: 700 };
-    const runner = Bun.spawn([process.execPath, ...runnerArgs(input)], {
+    const runner = Bun.spawn(runnerArgs(input), {
       cwd: scratch,
       env: {
         ...process.env,
@@ -782,7 +782,7 @@ describe("runLane", () => {
     const descendantPidPath = join(scratch, "cancel-descendant.pid");
     const modelExiting = join(scratch, "cancel-model.exiting");
     const input = options("claude", "cancel-drain");
-    const runner = Bun.spawn([process.execPath, ...runnerArgs(input)], {
+    const runner = Bun.spawn(runnerArgs(input), {
       cwd: scratch,
       env: {
         ...process.env,
@@ -815,7 +815,7 @@ describe("runLane", () => {
 
   it("clears a losing long-deadline timer when the shipped wrapper succeeds", async () => {
     const input = { ...options("claude", "long-deadline"), timeoutMs: 60_000 };
-    const runner = Bun.spawn([process.execPath, ...runnerArgs(input)], {
+    const runner = Bun.spawn(runnerArgs(input), {
       cwd: scratch,
       env: { ...process.env },
       stdout: "pipe",
@@ -838,7 +838,6 @@ describe("runLane", () => {
     cpSync(join(import.meta.dir, "../omp"), join(scratch, "omp"), { recursive: true });
     cpSync(join(import.meta.dir, "../harnesses.ts"), join(scratch, "harnesses.ts"));
     const runner = Bun.spawn([
-      process.execPath,
       join(isolatedRunner, "pstack-runner"),
       ...runnerArgs(input).slice(1),
     ], {
@@ -872,7 +871,7 @@ describe("runLane", () => {
     const input = { ...options("codex", "repeated-cancel"), timeoutMs: 60_000 };
     const started = join(scratch, "repeated-child.started");
     const terminated = join(scratch, "repeated-child.terminated");
-    const runner = Bun.spawn([process.execPath, ...runnerArgs(input)], {
+    const runner = Bun.spawn(runnerArgs(input), {
       cwd: scratch,
       env: {
         ...process.env,
@@ -913,7 +912,7 @@ describe("runLane", () => {
       FAKE_STARTED_PATH: started,
       FAKE_TERMINATED_PATH: terminated,
     };
-    const runner = Bun.spawn([process.execPath, ...runnerArgs(input)], {
+    const runner = Bun.spawn(runnerArgs(input), {
       cwd: scratch,
       env,
       stdout: "pipe",
@@ -935,7 +934,7 @@ describe("runLane", () => {
       error: { message: "launcher received SIGTERM; signal was sent to child" },
     });
 
-    const samePaths = Bun.spawn([process.execPath, ...runnerArgs(input)], {
+    const samePaths = Bun.spawn(runnerArgs(input), {
       cwd: scratch,
       env: { ...process.env },
       stdout: "pipe",
@@ -984,7 +983,7 @@ describe("runLane", () => {
   it("terminalizes catchable failures after reserving output paths", async () => {
     const unreadable = options("claude", "unreadable-prompt");
     chmodSync(unreadable.promptPath, 0o000);
-    const unreadableRunner = Bun.spawn([process.execPath, ...runnerArgs(unreadable)], {
+    const unreadableRunner = Bun.spawn(runnerArgs(unreadable), {
       cwd: scratch,
       env: { ...process.env },
       stdout: "pipe",
@@ -1005,7 +1004,7 @@ describe("runLane", () => {
       error: { message: "launcher failed after reserving output paths" },
     });
 
-    const samePaths = Bun.spawn([process.execPath, ...runnerArgs(unreadable)], {
+    const samePaths = Bun.spawn(runnerArgs(unreadable), {
       cwd: scratch,
       env: { ...process.env },
       stdout: "pipe",
@@ -1019,7 +1018,7 @@ describe("runLane", () => {
 
     const spawnFailure = options("claude", "spawn-failure");
     const modelStarted = join(scratch, "spawn-failure-model.started");
-    const spawnRunner = Bun.spawn([process.execPath, ...runnerArgs(spawnFailure)], {
+    const spawnRunner = Bun.spawn(runnerArgs(spawnFailure), {
       cwd: scratch,
       env: {
         ...process.env,
