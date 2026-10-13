@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { parseProviderOutput, reportedModelMatches } from "./parse-output.ts";
+import { parseProviderOutput, ProviderResultError, reportedModelMatches } from "./parse-output.ts";
 
 describe("parseProviderOutput", () => {
   it("extracts Claude text, model, usage, cost, and session", () => {
@@ -234,5 +234,54 @@ describe("parseProviderOutput", () => {
         "gpt-5.6-sol"
       )
     ).toThrow("final agent message");
+  });
+});
+
+
+describe("Grok terminal failures (#39)", () => {
+  for (const marker of [
+    { stop_reason: "cancelled" }, { stop_reason: "canceled" },
+    { subtype: "cancelled" }, { subtype: "canceled" },
+    { errors: ["PermissionCancelled: blocked command"] },
+    { errors: ["User canceled the execution"] },
+  ]) {
+    it(`recognizes cancellation ${JSON.stringify(marker)}`, () => {
+      const terminal = { type: "result", subtype: "error_during_execution", is_error: true, session_id: "s1", ...marker };
+      try {
+        parseProviderOutput("grok", JSON.stringify(terminal), "", "grok-4.6");
+        throw new Error("accepted cancellation");
+      } catch (error) {
+        expect(error).toBeInstanceOf(ProviderResultError);
+        if (!(error instanceof ProviderResultError)) throw error;
+        expect(error.status).toBe("cancelled");
+        expect(error.metadata.sessionId).toBe("s1");
+      }
+    });
+  }
+
+  for (const detail of [
+    { errors: [null, "API unavailable", 42, "retry later"], expected: "API unavailable\nretry later" },
+    { error: "API unavailable", expected: "API unavailable" },
+    { error: { message: "API unavailable" }, expected: "API unavailable" },
+    { result: "API unavailable", expected: "API unavailable" },
+    { expected: "grok reported error_during_execution" },
+  ]) {
+    it(`preserves error text: ${detail.expected}`, () => {
+      const { expected, ...fields } = detail;
+      expect(() => parseProviderOutput("grok", JSON.stringify({
+        type: "result", subtype: "error_during_execution", is_error: true, ...fields,
+      }), "", "grok-4.6")).toThrow(expected);
+    });
+  }
+
+  it("uses the last terminal event and rejects missing status fields", () => {
+    const success = { type: "result", subtype: "success", is_error: false, result: "earlier" };
+    const failure = { type: "result", subtype: "error_during_execution", is_error: true, errors: ["last error"] };
+    expect(() => parseProviderOutput("grok", [success, failure].map((event) => JSON.stringify(event)).join("\n"), "", "grok-4.6"))
+      .toThrow("last error");
+    for (const terminal of [{ type: "result", subtype: "success" }, { type: "result", is_error: true }]) {
+      expect(() => parseProviderOutput("grok", JSON.stringify(terminal), "", "grok-4.6"))
+        .toThrow("valid terminal status");
+    }
   });
 });

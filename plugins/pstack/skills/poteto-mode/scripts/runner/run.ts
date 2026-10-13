@@ -25,9 +25,10 @@ import {
   gatewayGuard,
 } from "./flex-providers.ts";
 import { versionedClaudeAlias } from "./model-aliases.ts";
-import { parseProviderOutput, reportedModelMatches, acceptsUnreportedModel } from "./parse-output.ts";
+import { parseProviderOutput, ProviderResultError, reportedModelMatches, acceptsUnreportedModel } from "./parse-output.ts";
 import { modelRefusal } from "./model-refusal.ts";
 import type {
+  ParsedOutput,
   Provider,
   ReceiptStatus,
   RunnerOptions,
@@ -65,6 +66,10 @@ export interface RunResult {
 
 function evidence(value: string): string {
   return value.trim().slice(0, ERROR_EVIDENCE_LIMIT);
+}
+
+function trailingEvidence(value: string): string {
+  return value.trim().slice(-ERROR_EVIDENCE_LIMIT);
 }
 
 function removeIfExists(path: string): void {
@@ -390,6 +395,11 @@ async function waitForGrokPreflightRetry(
   }
 }
 
+function grokModelAvailable(value: string, model: string): boolean {
+  const escaped = model.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^A-Za-z0-9_.-])${escaped}($|[^A-Za-z0-9_.-])`).test(value);
+}
+
 function preflightPassed(options: RunnerOptions, result: ProcessResult): boolean {
   const { provider, model } = options;
   if (result.exitCode !== 0 || result.timedOut) return false;
@@ -414,7 +424,9 @@ function preflightPassed(options: RunnerOptions, result: ProcessResult): boolean
     case "codex":
       return /logged in/i.test(combined);
     case "grok":
-      return /logged in/i.test(combined) && combined.includes(model);
+      return unavailableStatus(combined) === "child-failed"
+        && /\blogged in\b|\bYou are using XAI_API_KEY\./i.test(combined)
+        && grokModelAvailable(combined, model);
   }
   return false;
 }
@@ -437,18 +449,18 @@ function inspectPreflight(options: RunnerOptions, result: ProcessResult): {
   if (options.provider === "opencode" && result.exitCode === 0 && !result.timedOut) {
     return inspectOpenCodeModels(result.stdout, options.model, options.effort);
   }
-  const raw = evidence(`${result.stdout}\n${result.stderr}`);
+  const raw = `${result.stdout}\n${result.stderr}`;
   const passed = preflightPassed(options, result);
   return {
     status: passed ? "passed" : preflightFailureStatus(options.provider, options.model, raw),
-    evidence: passed ? successfulPreflightEvidence(options) : raw,
+    evidence: passed ? successfulPreflightEvidence(options) : evidence(raw),
   };
 }
 
 function unavailableStatus(value: string): ReceiptStatus {
   // Claude Code 2.1.289 reports a rejected gateway key as "Failed to
   // authenticate. API Error: 401" with `"api_error_status":401` in its result.
-  if (/not logged in|unauthenticated|authenticat(e|ion)|sign in|login required|"api_error_status":\s*401\b|ProviderAuthError/i.test(value)) {
+  if (/not logged in|not authenticated|unauthenticated|authenticat(e|ion)|sign in|login required|"api_error_status":\s*401\b|ProviderAuthError/i.test(value)) {
     return "unauthenticated";
   }
   if (/model.{0,40}(not found|unknown|unavailable|unsupported|not supported|invalid)|invalid.{0,20}model|ModelNotFound/i.test(value)) {
@@ -475,7 +487,7 @@ function preflightFailureStatus(
       : "child-failed";
   }
   if (provider === "omp") return "child-failed";
-  return provider === "grok" && !value.includes(model)
+  return provider === "grok" && !grokModelAvailable(value, model)
     ? "unavailable-model"
     : "unauthenticated";
 }
@@ -756,8 +768,7 @@ async function executeLane(
     !passed &&
     preflightResult.cancelledBy === null &&
     !preflightResult.timedOut &&
-    preflightFailureStatus(options.provider, options.model, rawPreflightEvidence) ===
-      "unauthenticated"
+    verdict.status === "unauthenticated"
   ) {
     preflightState = {
       argv: [preflightExecutable, ...preflight.args],
@@ -884,21 +895,37 @@ async function executeLane(
 
   if (result.cancelledBy !== null || result.timedOut || result.exitCode !== 0) {
     const rawFailureEvidence = `${result.stderr}\n${result.stdout}`;
-    const failureEvidence = evidence(rawFailureEvidence);
+    const failureEvidence = options.provider === "grok"
+      ? trailingEvidence(rawFailureEvidence)
+      : evidence(rawFailureEvidence);
+    let metadata: Omit<ParsedOutput, "text"> | null = null;
+    let terminalError: ProviderResultError | null = null;
+    if (options.provider === "grok") {
+      try {
+        metadata = parseProviderOutput("grok", result.stdout, result.stderr, options.model);
+      } catch (error) {
+        if (error instanceof ProviderResultError) {
+          metadata = error.metadata;
+          terminalError = error;
+        }
+      }
+    }
     const status: ReceiptStatus = result.cancelledBy !== null
       ? "cancelled"
       : result.timedOut
         ? "timed-out"
-        : unavailableStatus(rawFailureEvidence);
+        : terminalError?.status === "cancelled"
+          ? "cancelled"
+          : unavailableStatus(terminalError?.message ?? rawFailureEvidence);
     receipt = completeReceipt(options, {
       ...base,
       status,
-      reportedModel: null,
-      modelVerified: false,
-      modelEvidence: null,
-      sessionId: null,
-      usage: null,
-      costUsd: null,
+      ...(metadata === null
+        ? { reportedModel: null, modelVerified: false, modelEvidence: null }
+        : modelProof(options.provider, options.model, metadata.reportedModel)),
+      sessionId: metadata?.sessionId ?? null,
+      usage: metadata?.usage ?? null,
+      costUsd: metadata?.costUsd ?? null,
       error: {
         message: result.cancelledBy !== null
           ? result.signal === result.cancelledBy
@@ -906,7 +933,7 @@ async function executeLane(
             : `launcher received ${result.cancelledBy} after child exited`
           : result.timedOut
             ? `launcher exceeded the explicit ${options.timeoutMs}ms deadline`
-            : `child exited with status ${result.exitCode}`,
+            : terminalError?.message ?? `child exited with status ${result.exitCode}`,
         evidence: failureEvidence,
       },
     });
@@ -944,19 +971,27 @@ async function executeLane(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const terminalError = error instanceof ProviderResultError ? error : null;
+    const metadata = terminalError?.metadata;
     removeIfExists(options.outputPath);
     receipt = completeReceipt(options, {
       ...base,
-      status: "malformed-output",
-      reportedModel: null,
-      modelVerified: false,
-      modelEvidence: null,
-      sessionId: null,
-      usage: null,
-      costUsd: null,
+      status: terminalError?.status === "cancelled"
+        ? "cancelled"
+        : terminalError !== null
+          ? unavailableStatus(message)
+          : "malformed-output",
+      ...(metadata === undefined
+        ? { reportedModel: null, modelVerified: false, modelEvidence: null }
+        : modelProof(options.provider, options.model, metadata.reportedModel)),
+      sessionId: metadata?.sessionId ?? null,
+      usage: metadata?.usage ?? null,
+      costUsd: metadata?.costUsd ?? null,
       error: {
         message,
-        evidence: evidence(`${result.stderr}\n${result.stdout}`),
+        evidence: options.provider === "grok"
+          ? trailingEvidence(`${result.stderr}\n${result.stdout}`)
+          : evidence(`${result.stderr}\n${result.stdout}`),
       },
     });
   }

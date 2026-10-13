@@ -158,7 +158,7 @@ export function invocationCommand(options: RunnerOptions): CommandSpec {
           "--reasoning-effort",
           options.effort,
           "--permission-mode",
-          permissionMode(options.mode),
+          "auto",
           "--sandbox",
           grokSandbox(options.mode),
           "--tools",
