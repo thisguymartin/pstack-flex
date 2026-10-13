@@ -60,11 +60,9 @@ export default function parent(pi: Extension): void {
       const output = join(directory, "output.txt");
       const receipt = join(directory, "receipt.json");
       writeFileSync(prompt, args.prompt, { mode: 0o600 });
-      const bun = Bun.which("bun");
-      if (!bun) throw new Error("pstack_task requires Bun on PATH");
       const runner = process.env.PSTACK_OMP_RUNNER;
       if (!runner) throw new Error("Start OMP through pstack-omp to dispatch workers");
-      const child = Bun.spawn([bun, runner,
+      const child = Bun.spawn([runner,
         "--parent", "omp", "--provider", "omp", "--model", choice.model,
         "--effort", choice.effort, "--mode", args.mode, "--cwd", args.cwd,
         "--prompt", prompt, "--output", output, "--receipt", receipt, "--label", args.role,

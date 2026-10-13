@@ -100,7 +100,7 @@ with tempfile.TemporaryDirectory(prefix='pstack-omp-test-') as directory:
             if scenario == 'missing-model':
                 selected = 'pstack-test/missing'
             effort = 'max' if scenario == 'unsupported-effort' else 'off' if scenario == 'non-reasoning' else 'high'
-            argv = [bun, str(scripts / 'runner/pstack-runner'), '--parent', 'omp', '--provider', 'omp',
+            argv = [str(scripts / 'runner/pstack-runner'), '--parent', 'omp', '--provider', 'omp',
                     '--model', selected, '--effort', effort, '--mode',
                     'isolated-write' if scenario in ('outside-write', 'inside-write') else 'read-only',
                     '--cwd', str(work), '--prompt', str(root / 'prompt'), '--output', str(output), '--receipt', str(receipt)]
