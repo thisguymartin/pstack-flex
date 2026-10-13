@@ -14,6 +14,7 @@ Apply the following discipline. The orchestrator compares candidates on these ax
 - Encode invariants in types: hard-to-misuse types > runtime checks > prose comments, per the **encode-lessons-in-structure** principle skill.
 - Validate at boundaries, trust types inside, per the **boundary-discipline** principle skill. Business logic as pure functions. The shell stays thin.
 - Single source of truth per invariant. Derive instead of sync.
+- Screen the candidate against every check in [`design-red-flags.md`](design-red-flags.md) before handing it back. In the rationale, name any flags found and the concrete corrections made. Resolve split ownership, competing task paths, importable internals, and hand-synced lists before synthesis; if a flag remains unresolved, mark the candidate as needing revision.
 - Idempotent state transitions where applicable, per the **make-operations-idempotent** principle skill. Ask what happens if the operation runs twice or crashes halfway.
 - Short call chains. If tracing the flow needs more than three files, flatten the hierarchy, per the **laziness-protocol** and **minimize-reader-load** principle skills.
 
