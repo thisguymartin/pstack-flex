@@ -52,6 +52,7 @@ Use a scratch repository with synthetic data. Run the rows affected by the chang
 | Lane journal | Run with a temporary `PSTACK_FLEX_LANES_DIR` directory, then repeat with that directory absent. | The directory contains start metadata, growing stdout, and the matching receipt. Without it, the lane still completes without journal files. |
 | `intake` | Run against a scratch repository's real issue. | A brief under `.pstack/intake/` names a playbook, observable exit condition, and unresolved questions. Product code stays unchanged. |
 | `diff-behavior` | Compare branches with one intended and one accidental observable change. | The report identifies both changes with evidence from each branch. |
+| `correct` | Run the synthetic repeated-mistake scenario below from each affected parent. | Two occurrences support one scoped class; the fix uses the shared owner and a behavior check fails on the historical mistakes, then passes on the fix. |
 
 New models also need a probe and a role run from each affected app. Gateway protocol changes need a file tool call, a second turn using its result, and explicit bad-key and bad-model results. `scripts/probe-openrouter.sh` supplies the OpenRouter route battery and spends real credit; it is outside CI. Record results in the tracking issue and PR rather than a separate probe archive.
 
@@ -73,3 +74,25 @@ Result: pass | fail | not run
 Record unsupported requirements and failures directly. Do not convert a runner-only result into proof of parent behavior. Keep the PR draft until every required installed test passes.
 
 Outstanding installed checks from earlier merged work are tracked in [#36](https://github.com/thisguymartin/pstack-flex/issues/36). Each candidate still needs its own evidence.
+
+## Correct scenario
+
+Create a fresh synthetic repository per harness with `bash tests/correct-fixture.sh` from the candidate checkout. The script prints its path. It creates two commits that independently bypass `ticket.js:formatTicket`, plus a weak test that passes on both mistakes. It never changes the candidate or your application repository.
+
+Open that path in a fresh real parent session using the installed candidate. Invoke `pstack:correct` in Claude Code and Codex, or the bare `correct` skill in OpenCode, with this request:
+
+```text
+Prevent the repeated ticket-formatting mistakes on this branch. Ticket references
+must be TICKET- plus the uppercase ID. Fix only ticket rendering and add an
+enforceable behavior check. Show two distinct occurrence pointers and prove the
+check fails on the historical mistakes, then passes on the fix. Do not commit.
+```
+
+Record the installed commit and actual skill invocation in the transcript. Require these observations:
+
+- The skill loads and cites both mistake commits as one class. It reuses the shared formatter and tests both consumers with mixed-case input, such as `ab12` -> `TICKET-AB12`.
+- Run the new behavior check against copies of the historical bad renderers in a disposable checkout. Both produce a contract assertion failure; the fixed renderers pass `bun run test`. Record commands and diagnostics. A missing import or dependency does not count.
+- `unrelated.js` stays byte-identical, history receives no new commit, and any instruction table covers only ticket formatting.
+- Repeat in a fresh fixture on its `main` branch, where no mistake has occurred twice. The skill reports no qualifying class and leaves tracked files and history unchanged.
+
+Fixture creation and baseline test success alone are preparation, not installed skill evidence. Keep the PR draft until each affected real parent completes these actions. The OMP candidate remains subject to its separate live gate if that parent is exercised.

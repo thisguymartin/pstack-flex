@@ -15,6 +15,17 @@ else
   note "ok: native skills are the only user-facing workflow surface"
 fi
 
+correct_skill="$repo/plugins/pstack/skills/correct/SKILL.md"
+correct_front="$(sed -n '2,/^---$/p' "$correct_skill" 2>/dev/null || true)"
+if ! printf '%s\n' "$correct_front" | grep -Fxq 'name: correct' ||
+   ! printf '%s\n' "$correct_front" | grep -q '^description:' ||
+   printf '%s\n' "$correct_front" | grep -Eq '^(disable-model-invocation: true|user-invocable: false)$'; then
+  note "FAIL: correct must be packaged, user-invocable, and model-readable across parents"
+  fail=1
+else
+  note "ok: correct is packaged with shared invocation metadata"
+fi
+
 bad_principle=""
 for skill in "$repo"/plugins/pstack/skills/principle-*/SKILL.md; do
   if [ ! -f "$skill" ]; then
