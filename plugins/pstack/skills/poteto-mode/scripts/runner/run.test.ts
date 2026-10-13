@@ -75,6 +75,11 @@ if (name === "grok" && args[0] === "models") {
   if (process.env.FAKE_GROK_PREFLIGHT_LOG_PATH) {
     appendFileSync(process.env.FAKE_GROK_PREFLIGHT_LOG_PATH, "attempt\\n");
   }
+  if (process.env.FAKE_GROK_PREFLIGHT_OUTPUT !== undefined) {
+    console.log(process.env.FAKE_GROK_PREFLIGHT_OUTPUT);
+    if (process.env.FAKE_GROK_PREFLIGHT_ERROR) console.error(process.env.FAKE_GROK_PREFLIGHT_ERROR);
+    process.exit(0);
+  }
   const transientMarker = process.env.FAKE_GROK_TRANSIENT_UNAUTH_PATH;
   if (transientMarker && !existsSync(transientMarker)) {
     writeFileSync(transientMarker, String(process.pid));
@@ -282,6 +287,8 @@ beforeEach(() => {
   delete process.env.FAKE_MODEL_EXITING_PATH;
   delete process.env.FAKE_REMOVE_EXECUTABLE_AFTER_PREFLIGHT;
   delete process.env.FAKE_GROK_UNAUTH;
+  delete process.env.FAKE_GROK_PREFLIGHT_OUTPUT;
+  delete process.env.FAKE_GROK_PREFLIGHT_ERROR;
   delete process.env.FAKE_GROK_TRANSIENT_UNAUTH_PATH;
   delete process.env.FAKE_GROK_PREFLIGHT_LOG_PATH;
   delete process.env.FAKE_GROK_MISSING_MODEL;
@@ -307,6 +314,8 @@ afterEach(() => {
   delete process.env.FAKE_MODEL_EXITING_PATH;
   delete process.env.FAKE_REMOVE_EXECUTABLE_AFTER_PREFLIGHT;
   delete process.env.FAKE_GROK_UNAUTH;
+  delete process.env.FAKE_GROK_PREFLIGHT_OUTPUT;
+  delete process.env.FAKE_GROK_PREFLIGHT_ERROR;
   delete process.env.FAKE_GROK_TRANSIENT_UNAUTH_PATH;
   delete process.env.FAKE_GROK_PREFLIGHT_LOG_PATH;
   delete process.env.FAKE_GROK_MISSING_MODEL;
@@ -1500,4 +1509,115 @@ describe("childEnvironment", () => {
       KEEP_ME: "yes",
     });
   });
+});
+
+
+describe("Grok authentication and terminal receipts (#39)", () => {
+  for (const auth of ["You are logged in with grok.com.", "You are using XAI_API_KEY."]) {
+    it(`accepts ${auth} with an exact model token`, async () => {
+      process.env.FAKE_GROK_PREFLIGHT_OUTPUT = `${auth}\nAvailable models: [grok-4.6] (default)`;
+      const log = join(scratch, "preflight.log");
+      process.env.FAKE_GROK_PREFLIGHT_LOG_PATH = log;
+      const input = options("grok");
+      const result = await runLane(input);
+      expect(result.exitCode).toBe(0);
+      expect(readFileSync(log, "utf8")).toBe("attempt\n");
+      expect(readFileSync(input.outputPath, "utf8")).toBe("GROK_OK");
+      expect(result.receipt.preflight.status).toBe("passed");
+    });
+  }
+
+  for (const failure of ["unauthenticated", "You are not authenticated.", "Not logged in."]) {
+    it(`rejects contradictory API-key authentication: ${failure}`, async () => {
+      process.env.FAKE_GROK_PREFLIGHT_OUTPUT = "You are using XAI_API_KEY.\nAvailable models: grok-4.6";
+      process.env.FAKE_GROK_PREFLIGHT_ERROR = failure;
+      const log = join(scratch, "preflight.log");
+      const started = join(scratch, "model.started");
+      process.env.FAKE_GROK_PREFLIGHT_LOG_PATH = log;
+      process.env.FAKE_MODEL_STARTED_PATH = started;
+      const input = options("grok");
+      const result = await runLane(input);
+      expect(result.exitCode).toBe(77);
+      expect(result.receipt.status).toBe("unauthenticated");
+      expect(readFileSync(log, "utf8")).toBe("attempt\nattempt\n");
+      expect(result.receipt.preflight.evidence).toContain("attempt 2 failed");
+      expect(existsSync(started)).toBe(false);
+      expect(existsSync(input.outputPath)).toBe(false);
+    }, 10_000);
+  }
+
+  for (const listed of ["grok-4.60", "xgrok-4.6", "grok-4.6-build", "grok-4x6"]) {
+    it(`rejects neighboring model ${listed}`, async () => {
+      process.env.FAKE_GROK_PREFLIGHT_OUTPUT = `You are using XAI_API_KEY.\nAvailable models: ${listed}`;
+      const log = join(scratch, "preflight.log");
+      const started = join(scratch, "model.started");
+      process.env.FAKE_GROK_PREFLIGHT_LOG_PATH = log;
+      process.env.FAKE_MODEL_STARTED_PATH = started;
+      const result = await runLane(options("grok"));
+      expect(result.exitCode).toBe(69);
+      expect(result.receipt.status).toBe("unavailable-model");
+      expect(readFileSync(log, "utf8")).toBe("attempt\n");
+      expect(existsSync(started)).toBe(false);
+    });
+  }
+
+  it("rejects an explicit model error despite successful login and listing", async () => {
+    process.env.FAKE_GROK_PREFLIGHT_OUTPUT = "You are logged in.\nAvailable models: grok-4.6\n" + "startup info\n".repeat(500);
+    process.env.FAKE_GROK_PREFLIGHT_ERROR = "model grok-4.6 is not supported";
+    const log = join(scratch, "preflight.log");
+    process.env.FAKE_GROK_PREFLIGHT_LOG_PATH = log;
+    const result = await runLane(options("grok"));
+    expect(result.exitCode).toBe(69);
+    expect(result.receipt.status).toBe("unavailable-model");
+    expect(readFileSync(log, "utf8")).toBe("attempt\n");
+  });
+
+  for (const childExit of [0, 1]) {
+    for (const scenario of ["cancelled", "api-error", "auth-error", "model-error", "success"] as const) {
+      it(`preserves ${scenario} metadata at child exit ${childExit}`, async () => {
+        const message = scenario === "api-error" ? "API unavailable"
+          : scenario === "auth-error" ? "You are not authenticated."
+          : scenario === "model-error" ? "model grok-4.6 is not supported"
+          : "User cancelled the execution";
+        const terminal = {
+          type: "result", subtype: scenario === "success" ? "success" : "error_during_execution",
+          is_error: scenario !== "success", stop_reason: scenario === "cancelled" ? "cancelled" : "end_turn",
+          errors: scenario === "success" ? [] : [message], result: "partial or final text",
+          session_id: "grok-terminal-session", modelUsage: { "grok-4.6-build": {} },
+          usage: { input_tokens: 30, output_tokens: 4, total_tokens: 34 }, total_cost_usd: 0.02,
+        };
+        writeFileSync(join(bin, "grok"), `#!/usr/bin/env bun
+if (process.argv[2] === "models") {
+  console.log("You are using XAI_API_KEY. Available models: grok-4.6");
+  process.exit(0);
+}
+console.log(JSON.stringify({type:"system",skills:Array(1000).fill("synthetic-skill")}));
+console.error("startup warning\\n".repeat(500));
+console.log(${JSON.stringify(JSON.stringify(terminal))});
+process.exit(${childExit});
+`);
+        const input = options("grok");
+        const result = await runLane(input);
+        const status = scenario === "success" ? (childExit === 0 ? "complete" : "child-failed")
+          : scenario === "cancelled" ? "cancelled"
+          : scenario === "auth-error" ? "unauthenticated"
+          : scenario === "model-error" ? "unavailable-model" : "child-failed";
+        expect(receipt(input.receiptPath)).toMatchObject({
+          status, exitCode: childExit, sessionId: "grok-terminal-session",
+          reportedModel: "grok-4.6-build", modelVerified: true, modelEvidence: "provider-report",
+          usage: { inputTokens: 30, outputTokens: 4, totalTokens: 34 }, costUsd: 0.02,
+        });
+        if (status === "complete") {
+          expect(result.exitCode).toBe(0);
+          expect(readFileSync(input.outputPath, "utf8")).toBe("partial or final text");
+        } else {
+          expect(result.exitCode).not.toBe(0);
+          expect(existsSync(input.outputPath)).toBe(false);
+          expect(result.receipt.error?.message).toBe(scenario === "success" ? "child exited with status 1" : message);
+          expect(result.receipt.error?.evidence).toContain('"session_id":"grok-terminal-session"');
+          expect(result.receipt.error?.evidence.length).toBeLessThanOrEqual(4_000);
+        }
+      });
+    }
+  }
 });
