@@ -85,8 +85,10 @@ describe("configuration", () => {
     for (const harness of HARNESSES) {
       const paths = configurationPaths(harness.id, cwd, env);
       if (paths.projectSheet === null) throw new Error("fixture must have a project sheet");
-      write(paths.globalSheet, "how explorer: codex:gpt-6-luna@high\njudgment and prose: claude:fable@max\n");
-      write(paths.projectSheet, "how explorer: opencode:openrouter/z-ai/glm-5.3@high\n");
+      write(paths.globalSheet, harness.id === "omp"
+        ? "how explorer: omp:openai/gpt-6-luna@high\njudgment and prose: omp:anthropic/claude-opus-4-6@max\n"
+        : "how explorer: codex:gpt-6-luna@high\njudgment and prose: claude:fable@max\n");
+      write(paths.projectSheet, `how explorer: ${harness.id === "omp" ? "omp" : "opencode"}:openrouter/z-ai/glm-5.3@high\n`);
       const selected = readConfiguration(harness.id, cwd, env);
       expect(selected.activeSheet).toBe(paths.projectSheet);
       expect(Object.keys(selected.roles)).toEqual(["how explorer"]);

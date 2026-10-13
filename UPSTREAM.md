@@ -93,3 +93,9 @@ git log --oneline 77a91fd6f75483b971fa5cca4a88f1337f6099dd..upstream/main
 6. Record installed evidence in the PR. Merge before tagging only after the live gate passes.
 
 There is no generated README snapshot or parallel skill tree to refresh. Git retains prior content and the complete import history.
+
+## OMP candidate
+
+OMP implementation belongs in `plugins/pstack/skills/poteto-mode/scripts/omp/`. Keep the public `scripts/pstack-omp` wrapper and shared registration/dispatch calls at their existing boundaries. Do not copy shared skills into the OMP directory.
+
+Issue [#46](https://github.com/thisguymartin/pstack-flex/issues/46) adds OMP at the existing harness and runner boundaries. The shared skills stay in one tree. `pstack-omp` and its extension enforce OMP worker routing; existing parent integrations are unchanged. See [OMP.md](docs/OMP.md) for the pinned binary, account routes, file-tool restrictions and outstanding live gate. The open-pstack 1.8 registry migration remains separate; this candidate does not advance the upstream source pins.

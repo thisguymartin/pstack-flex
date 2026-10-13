@@ -58,6 +58,10 @@ Add the checkout to your [OpenCode config](https://opencode.ai/docs/config/), no
 
 OpenCode loads skills under bare names such as `poteto-mode`. Every provider-qualified role uses the external runner. Only `inherit-parent` and `auto` use its native `task` tool. OpenCode writer lanes can edit their worktree but cannot run shell commands, Git commands, tests, or builds. A task requiring those tools must report the unsupported requirement. Headless CI use is unsupported.
 
+### OMP-only candidate
+
+The OMP integration uses one runtime with configurable model providers. Start it with `plugins/pstack/skills/poteto-mode/scripts/pstack-omp`. It reuses OMP credentials, rejects alternate worker runtimes and requires explicit role models. It is pinned to OMP 18.10.3 and has not passed the installed interactive live gate. Read [setup, enforcement and limitations](docs/OMP.md) before use.
+
 ## Configure and run
 
 In Claude Code:

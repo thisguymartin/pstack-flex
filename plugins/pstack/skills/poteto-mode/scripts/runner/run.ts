@@ -1,3 +1,4 @@
+import { ompEffortRefusal, ompRuntimeRefusal } from "../omp/policy.ts";
 import {
   closeSync,
   existsSync,
@@ -9,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { OMP_VERSION, supportedOmpVersion } from "../omp/adapter.ts";
 import { invocationCommand, preflightCommand, type CommandSpec } from "./commands.ts";
 import { laneRoute, withoutParentIdentity } from "../harnesses.ts";
 import {
@@ -362,6 +364,7 @@ function preflightPassed(options: RunnerOptions, result: ProcessResult): boolean
   // `claude --version` succeeded; gateway credentials were already verified
   // in-process by the gateway guard before any subprocess ran.
   if (isGatewayProvider(provider)) return true;
+  if (provider === "omp") return supportedOmpVersion(result.stdout);
   const combined = `${result.stdout}\n${result.stderr}`;
   switch (provider) {
     case "claude": {
@@ -389,6 +392,7 @@ function successfulPreflightEvidence(options: RunnerOptions): string {
   if (isGatewayProvider(provider)) {
     return "claude binary responded; gateway credentials verified in-process";
   }
+  if (provider === "omp") return `OMP ${OMP_VERSION} binary; model, effort and credentials checked by the guard before inference`;
   return provider === "grok"
     ? `authenticated; model ${model} available`
     : "authenticated";
@@ -438,6 +442,7 @@ function preflightFailureStatus(
       ? "unavailable-model"
       : "child-failed";
   }
+  if (provider === "omp") return "child-failed";
   return provider === "grok" && !value.includes(model)
     ? "unavailable-model"
     : "unauthenticated";
@@ -525,6 +530,10 @@ function completeReceipt(
 }
 
 export function validateOptions(options: RunnerOptions): void {
+  const runtimeRefusal = ompRuntimeRefusal(options.parent, options.provider);
+  if (runtimeRefusal !== null) throw new UsageError(runtimeRefusal);
+  const effortRefusal = ompEffortRefusal(options.provider, options.effort);
+  if (effortRefusal !== null) throw new UsageError(effortRefusal);
   if (laneRoute(options.parent, options.provider) === "native") {
     throw new UsageError(
       `provider ${options.provider} is native to parent ${options.parent}; use the parent subagent primitive`

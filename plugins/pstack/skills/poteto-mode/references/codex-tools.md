@@ -64,3 +64,11 @@ Before changing either target, snapshot its bytes. Write only after exact model 
 Where upstream names `run`, drive the CLI yourself. Where it names `verify`, drive the UI with available tools and observe the artifact. Where it names `plugin-dev:skill-development`, use the current harness's skill-authoring guidance. Where it names `loop`, use an available recurring task or rerun the step at the specified cadence.
 
 Use the current harness's consumed instructions file for standing rules. Transcript paths and native agent stores are host state, not lane-provider configuration. `worktree-audit.sh` reads Claude transcripts; its chat column is unavailable on other hosts. Do not create a Claude transcript directory to compensate.
+
+## OMP-only parent
+
+Start through `pstack-omp`, not plain OMP. Read [OMP setup](../../../../../docs/OMP.md). The launcher loads the same shared skill tree and its parent extension. Use `read`, `grep`, `write`, `edit` and `bash` in the parent. Ask the user in plain text when a question tool is unavailable.
+
+Every worker uses `pstack_task` with a configured role, zero-based index, complete prompt, explicit cwd and access mode. Retain its receipt. It blocks until completion and forwards cancellation to the runner. Independent calls may run together; drain them before judging. No native task or eval delegation is allowed. Missing role assignments require setup; do not take defaults from the calling skill. Workers cannot run shell commands. Run tests and builds in the parent after workers finish.
+
+The OMP `launch` integration recipe writes only the selected model sheet after successful probes and confirmation. The launcher reads it on startup. Do not modify OMP provider configuration, instructions arrays or credentials.
