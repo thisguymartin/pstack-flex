@@ -389,7 +389,7 @@ const modelIndex =`));
       const terminated = join(scratch, "stream-child.terminated");
       writeFileSync(join(bin, "codex"), fake.replace('if (cancelStage === stage) {',
         'if (cancelStage === stage) { process.stdout.write("synthetic progress\\n"); process.stderr.write("synthetic warning\\n");'));
-      const child = Bun.spawn([process.execPath, ...runnerArgs(input)], {
+      const child = Bun.spawn(runnerArgs(input), {
         cwd: scratch,
         env: { ...process.env, FAKE_CANCEL_STAGE: "model", FAKE_STARTED_PATH: started, FAKE_TERMINATED_PATH: terminated },
         stdout: "pipe",
