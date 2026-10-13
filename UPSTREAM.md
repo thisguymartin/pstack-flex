@@ -12,6 +12,8 @@ The content source is [Cursor's pstack](https://github.com/cursor/plugins/tree/m
 
 Cursor, open-pstack, and pstack-flex versions identify separate distributions. The plugin manifests currently retain version `1.5.0`; use the installed commit to identify an unreleased candidate. [NOTICE.md](NOTICE.md) preserves attribution and license sources.
 
+Issue [#45](https://github.com/thisguymartin/pstack-flex/issues/45) selectively ports the fresh-agent guidance and swarm respawn wording from Cursor's [0.15.6 change](https://github.com/cursor/plugins/commit/23e4138daa01). The shared policy includes consolidated briefs and costly-state reuse exceptions; the harness mapping retains parent-owned routes and isolated writers. This partial import does not advance the full-tree source pins above. Claude's skill preload from [#41](https://github.com/thisguymartin/pstack-flex/issues/41) remains in place.
+
 ## Ownership boundaries
 
 There is one `plugins/pstack/skills/` tree for Claude Code, Codex, and OpenCode beta. Keep workflow and principle changes shared. Translate tool names in `poteto-mode/references/codex-tools.md`, whose path stays stable for upstream pointers. Put provider models, dispatch rules, and receipts in `poteto-mode/references/provider-dispatch.md`. The parent resolves routes once; children never detect or reroute themselves.

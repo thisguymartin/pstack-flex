@@ -32,13 +32,13 @@ Start all N workers in one fan-out phase through provider dispatch. Native lanes
 
 When a worker must start from a non-default branch, check that branch out in the worker's own worktree and name the worktree path in its brief.
 
-Every brief stands alone. Include the goal, scope, exact slice or race arm, how to verify, and what to report. Reports use `PASS`, `ISSUES`, or `BLOCKED` with evidence. A worker that can prove a defect reports `ISSUES` and lists every issue it can prove, not only the first.
+Every brief stands alone. Include the goal, scope, exact slice or race arm, how to verify, and what to report. For a fix round, follow-up, retry, or next queue item, start a fresh worker with the original scope, every later directive, the prior report, and the branch and worktree path. Reuse requires costly state under poteto-mode's Subagents rule; preserve the assigned route and writer isolation. Reports use `PASS`, `ISSUES`, or `BLOCKED` with evidence. A worker that can prove a defect reports `ISSUES` and lists every issue it can prove, not only the first.
 
 If a worker drops out, proceed with N-1 and note the provider, model, and receipt failure. Never substitute another provider silently.
 
 ## Phase C: Aggregate
 
-Read the terminal results. Drop a result that does not record the SHAs and method its brief names, and rerun that worker once. After a second miss, record a gap. A gap does not count as a pass. For coverage, every required slice needs a result. For a race, apply the selection rule declared up front. Use first pass, rank all, or best-of. Do not paste raw worker dumps.
+Read the terminal results. Drop a result that does not record the SHAs and method its brief names, and respawn a fresh worker once with the consolidated brief and missing evidence named. Drain the prior worker before handing its writable location to the replacement. After a second miss, record a gap. A gap does not count as a pass. For coverage, every required slice needs a result. For a race, apply the selection rule declared up front. Use first pass, rank all, or best-of. Do not paste raw worker dumps.
 
 Keep a compact result table, one-line evidenced issues, and explicit gaps or dropouts.
 

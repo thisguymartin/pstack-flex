@@ -37,6 +37,17 @@ Use the route returned for the configured descriptor. `inherit-parent` and `auto
 
 Pass the full task, access mode, grounding paths, and unique output location. Give writers dedicated worktrees. Launch independent lanes together, retain handles, then drain every lane before judging.
 
+## Agent continuity
+
+The parent applies poteto-mode's Subagents rule before dispatch. New tasks, fix rounds, follow-ups, retries, and queue items use fresh agents with the original scope, all later directives, the prior report, and the branch and worktree path. An owner role or an existing branch does not require the same agent. Reuse requires named state that is costly to transfer. Stop and hold orders remain allowed.
+
+- Claude Code starts a new `Agent` call without a resume ID. Use an existing agent's resume or message mechanism only for the costly-state exception. Keep `poteto-agent`'s declared skill preload and full-read instruction.
+- Codex uses a new `spawn_agent` for new work. `followup_task` or a work-bearing `send_message` to an existing agent requires the costly-state exception; status reads and stop/hold orders do not. Fresh inherited helpers still read poteto-mode.
+- OpenCode starts a new inherited `task` without the prior task's continuation ID. Continue an existing task only for the costly-state exception. Qualified descriptors still use the external runner.
+- External lanes, including OMP's `pstack_task`, start a new runner invocation with unique output and receipt paths. A retained task/session handle supervises the current attempt; it is not a continuation API. If work needs a live lane's costly state and that lane has no continuation API, report that limitation rather than restarting it and claiming reuse.
+
+The parent keeps the resolved role route and access mode. Children never reroute themselves. Drain or stop the prior writer and confirm it has stopped before a replacement writes in the same worktree. Preserve its edits and report, check the current branch and diff, and pass that state to the new worker. Concurrent writers still need separate worktrees or output directories. A retry adds neither a model fallback nor an implicit timeout.
+
 ## External launch
 
 Use the adapter's `launch` recipe. The runner's own timeout is absent unless the user or task supplies a deadline.
