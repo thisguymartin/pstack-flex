@@ -14,7 +14,7 @@ export async function main(args: string[]): Promise<number> {
     prompt: { type: "string" }, print: { type: "boolean" }, help: { type: "boolean", short: "h" },
   } });
   if (values.help) {
-    console.log("Usage: pstack-omp [--cwd <project>] [--model <provider/model>] [--effort <level>] [--print --prompt <text>]\nUses existing OMP configuration and credentials. Set PSTACK_OMP_EXECUTABLE to an explicit OMP 18.10.3 binary if it is not on PATH. Workers require .omp/pstack-models.md or ~/.omp/agent/pstack-models.md with explicit omp:provider/model@effort assignments. No native worker fallback.");
+    console.log("Usage: pstack-omp [--cwd <project>] [--model <provider/model>] [--effort <level>] [--print --prompt <text>]\nUses existing OMP configuration and credentials. Set PSTACK_OMP_EXECUTABLE to an explicit OMP 18.11.3 binary if it is not on PATH. Workers require .omp/pstack-models.md or ~/.omp/agent/pstack-models.md with explicit omp:provider/model@effort assignments. No native worker fallback.");
     return 0;
   }
   const cwd = resolve(values.cwd ?? process.cwd());
