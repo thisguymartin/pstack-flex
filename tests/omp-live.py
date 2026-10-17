@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Opt-in released-binary tests. Uses only a synthetic localhost provider.
 Run: python3 tests/omp-live.py /absolute/path/to/omp
-Requires OMP 18.10.3, Bun on PATH, and permission to listen on localhost.
+Requires OMP 18.11.3, Bun on PATH, and permission to listen on localhost.
 """
 import json
 import os

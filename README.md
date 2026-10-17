@@ -60,7 +60,7 @@ OpenCode loads skills under bare names such as `poteto-mode`. Every provider-qua
 
 ### OMP-only candidate
 
-The OMP integration uses one runtime with configurable model providers. Start it with `plugins/pstack/skills/poteto-mode/scripts/pstack-omp`. It reuses OMP credentials, rejects alternate worker runtimes and requires explicit role models. It is pinned to OMP 18.10.3 and has not passed the installed interactive live gate. Read [setup, enforcement and limitations](docs/OMP.md) before use.
+The OMP integration uses one runtime with configurable model providers. Start it with `plugins/pstack/skills/poteto-mode/scripts/pstack-omp`. It reuses OMP credentials, rejects alternate worker runtimes and requires explicit role models. It is pinned to OMP 18.11.3 and has not passed the installed interactive live gate. Read [setup, enforcement and limitations](docs/OMP.md) before use.
 
 ## Configure and run
 

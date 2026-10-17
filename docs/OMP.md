@@ -1,6 +1,6 @@
 # OMP-only mode
 
-This candidate adds an OMP parent and OMP workers. It is tracked in [#46](https://github.com/thisguymartin/pstack-flex/issues/46). It has not passed the installed interactive live gate and is not a release. The integration is pinned to OMP 18.10.3. Validate a new version before changing the pin.
+This candidate adds an OMP parent and OMP workers. It is tracked in [#46](https://github.com/thisguymartin/pstack-flex/issues/46). It has not passed the installed interactive live gate and is not a release. The integration is pinned to OMP 18.11.3. Validate a new version before changing the pin.
 
 ## Start the parent
 

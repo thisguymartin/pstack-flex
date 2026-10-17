@@ -1,7 +1,7 @@
 import { lstatSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 
-// Structural subset of OMP 18.10.3's public extension API. No SDK runtime dependency.
+// Structural subset of OMP 18.11.3's public extension API. No SDK runtime dependency.
 interface Model { provider: string; id: string }
 interface Context {
   cwd: string;

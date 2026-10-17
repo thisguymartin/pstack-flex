@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import type { CommandSpec } from "../runner/commands.ts";
 import type { ParsedOutput, RunnerOptions } from "../runner/types.ts";
 
-export const OMP_VERSION = "18.10.3";
+export const OMP_VERSION = "18.11.3";
 export function supportedOmpVersion(stdout: string): boolean {
   return stdout.trim() === `omp/${OMP_VERSION}`;
 }

@@ -26,8 +26,8 @@ const stream = (...events: unknown[]) => events.map(event => JSON.stringify(even
 
 describe("OMP execution", () => {
   it("pins the tested release and supports explicitly disabled reasoning", () => {
-    expect(supportedOmpVersion("omp/18.10.3\n")).toBe(true);
-    expect(supportedOmpVersion("omp/18.10.4")).toBe(false);
+    expect(supportedOmpVersion("omp/18.11.3\n")).toBe(true);
+    expect(supportedOmpVersion("omp/18.11.4")).toBe(false);
     expect(parseDescriptor("omp:deepseek/deepseek-chat@off").kind).toBe("model");
     expect(() => parseDescriptor("codex:gpt-6-sol@off")).toThrow("require OMP");
   });
