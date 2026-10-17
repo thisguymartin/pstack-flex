@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parseModelSheet } from "../configuration.ts";
 import { parseArgs } from "./cli.ts";
 import { invocationCommand } from "./commands.ts";
 import { GATEWAY_SPECS } from "./flex-providers.ts";
@@ -33,13 +34,6 @@ const MATRIX_HEADER = [
 const FAMILY_ORDER = ["fable", "sol", "grok", "opus", "astra", "sol-6.1", "sol-6", "luna"] as const;
 const GPT6_FAMILIES = ["astra", "sol-6.1", "sol-6", "luna"] as const;
 const PROVIDERS = ["claude", "codex", "grok"] as const;
-const DESCRIPTOR_RE =
-  /(claude|codex|grok):[a-z0-9.-]+@(low|medium|high|xhigh|max)/g;
-const PANEL_ROLES = [
-  "arena runners",
-  "arena cross-judge pool",
-  "interrogate reviewers",
-] as const;
 const SHEET_ROLES = [
   "feature, refactoring",
   "bug-fix",
@@ -59,12 +53,30 @@ const SHEET_ROLES = [
 ] as const;
 const SETUP_SECTION_ORDER = [
   "### 2. Load current state",
-  "### 3. Parse per-family efforts",
-  "### 4. Collect one requested effort per family",
+  "### 3. Parse per-role efforts",
+  "### 4. Collect requested effort changes",
   "### 5. Probe the requested pairs",
   "### 6. Render, preserving role families",
   "### 7. Confirm and commit",
 ] as const;
+
+const DEFAULT_ROLE_DESCRIPTORS = {
+  "feature, refactoring": "claude:opus@medium",
+  "bug-fix": "codex:gpt-6.1-sol@high",
+  "perf-issue": "codex:gpt-6.1-sol@xhigh",
+  hillclimb: "codex:gpt-6.1-sol@xhigh",
+  "judgment and prose": "claude:opus@high",
+  "hardest tasks": "claude:opus@high",
+  "how explorer": "codex:gpt-6-luna@low",
+  "how explainer": "claude:fable@high",
+  "why investigators, synthesizer": "codex:gpt-6-luna@high",
+  "reflect tooling, judgment, divergent, synthesizer": "claude:opus@medium",
+  "arena runners": "codex:gpt-6.1-sol@high, claude:opus@high",
+  "arena cross-judge pool": "codex:gpt-6-astra@high, claude:fable@high",
+  "swarm workers": "codex:gpt-6-sol@medium",
+  "architect runners": "claude:fable@high, codex:gpt-6-astra@high",
+  "interrogate reviewers": "claude:fable@high, codex:gpt-6-astra@high",
+} as const;
 
 const OPEN_OPENROUTER_MODEL = "<any OpenRouter model ID>";
 const FLEX_MATRIX_HEADER = [
@@ -183,30 +195,6 @@ function parseModelMatrix(
   });
 }
 
-function defaultDescriptor(row: MatrixRow): string {
-  return `${row.provider}:${row.model}@${row.defaultEffort}`;
-}
-
-function parseDefaultPanel(
-  markdown: string,
-  heading = "## Default panel"
-): string[] {
-  const lines = markdown.split(/\r?\n/);
-  const start = lines.findIndex((line) => line.trim() === heading);
-  if (start < 0) {
-    throw new Error(`missing ${heading}`);
-  }
-  for (let i = start + 1; i < lines.length; i++) {
-    if (lines[i].startsWith("## ")) {
-      break;
-    }
-    if (lines[i].startsWith("`")) {
-      return lines[i].match(DESCRIPTOR_RE) ?? [];
-    }
-  }
-  throw new Error(`${heading} has no descriptor line`);
-}
-
 function parseFrontmatter(text: string): {
   fields: Record<string, string>;
   body: string;
@@ -229,27 +217,26 @@ function parseFrontmatter(text: string): {
   return { fields, body: text.slice(end + 5) };
 }
 
-function firstRunSheet(setup: string): string {
-  const match = setup.match(
-    /```markdown\n(# pstack model configuration\n[\s\S]*?)```/
-  );
-  if (!match) {
-    throw new Error("setup-pstack is missing the first-run sheet fence");
-  }
-  return match[1];
+function firstRunSheet(markdown: string, heading = "# pstack model configuration"): string {
+  const marker = `\`\`\`markdown\n${heading}\n`;
+  const start = markdown.indexOf(marker);
+  const end = markdown.indexOf("\n```", start + marker.length);
+  if (start < 0 || end < 0) throw new Error(`missing first-run sheet: ${heading}`);
+  return markdown.slice(start + "```markdown\n".length, end);
+}
+
+function roleDescriptors(markdown: string, heading?: string): Record<string, string> {
+  return Object.fromEntries(Object.entries(parseModelSheet(firstRunSheet(markdown, heading)))
+    .map(([role, lanes]) => [role, lanes.map((lane) => lane.descriptor).join(", ")]));
 }
 
 describe("model matrix", () => {
   const dispatch = readFileSync(DISPATCH_PATH, "utf8");
   const rows = parseModelMatrix(dispatch);
   const setup = readFileSync(SETUP_PATH, "utf8");
-  const panel = parseDefaultPanel(dispatch);
-  const architectPanel = parseDefaultPanel(
-    dispatch,
-    "## Default architect panel"
-  );
+  const defaults = roleDescriptors(dispatch);
 
-  it("owns the effort universe and first-run defaults", () => {
+  it("owns the effort universe and proposed defaults for newly assigned families", () => {
     expect([...EFFORTS]).toEqual(["low", "medium", "high", "xhigh", "max"]);
     expect(rows.map((row) => row.family)).toEqual([...FAMILY_ORDER]);
     for (const row of rows) {
@@ -326,7 +313,7 @@ describe("model matrix", () => {
     expect(shipped).toEqual([...expected].sort());
   });
 
-  it("ships the GPT-6 Codex families as stock rows and puts them in the first-run sheet", () => {
+  it("ships the GPT-6 Codex families as independently selectable stock rows", () => {
     const gpt6Rows = rows.filter((row) =>
       (GPT6_FAMILIES as readonly string[]).includes(row.family)
     );
@@ -336,58 +323,36 @@ describe("model matrix", () => {
       ["sol-6", "gpt-6-sol"],
       ["luna", "gpt-6-luna"],
     ]);
-    const sheet = firstRunSheet(setup);
     for (const row of gpt6Rows) {
       expect(row.upstreamChoice).toBe("-");
       expect(row.provider).toBe("codex");
       expect(row.defaultEffort).toBe("high");
       expect(row.selectableEfforts).toEqual([...EFFORTS]);
       expect(row.claudeNativeAgentStem).toBeNull();
-      if (row.family !== "sol-6") {
-        expect(sheet).toContain(defaultDescriptor(row));
-      }
+      expect(firstRunSheet(setup)).toContain(`codex:${row.model}@`);
     }
     expect(new Set(rows.map((row) => row.family)).size).toBe(rows.length);
-    expect(new Set(rows.map((row) => `${row.provider}:${row.model}`)).size)
-      .toBe(rows.length);
-    const sol6 = defaultDescriptor(rows.find((row) => row.family === "sol-6.1")!);
-    const luna = defaultDescriptor(rows.find((row) => row.family === "luna")!);
-    for (const role of ["feature, refactoring", "bug-fix", "perf-issue", "hillclimb"]) {
-      expect(sheet).toContain(`${role}: ${sol6}\n`);
-    }
-    for (const role of ["how explorer", "swarm workers"]) {
-      expect(sheet).toContain(`${role}: ${luna}\n`);
-    }
-
+    expect(new Set(rows.map((row) => `${row.provider}:${row.model}`)).size).toBe(rows.length);
   });
 
-  it("owns the default panel: four lanes, three providers, matrix default efforts", () => {
-    expect(panel).toEqual([
-      "claude:fable@max",
-      "codex:gpt-6-astra@high",
-      "grok:grok-4.7@xhigh",
-      "claude:opus@max",
-    ]);
-    const byDescriptor = new Set(rows.map(defaultDescriptor));
-    for (const descriptor of panel) {
-      expect(byDescriptor.has(descriptor)).toBe(true);
+  it("owns a complete role-specific map with independent panels and efforts", () => {
+    expect(defaults).toEqual(DEFAULT_ROLE_DESCRIPTORS);
+    expect(Object.keys(defaults)).toEqual([...SHEET_ROLES]);
+    const byFamily = new Map(rows.map((row) => [`${row.provider}:${row.model}`, row]));
+    for (const lanes of Object.values(parseModelSheet(firstRunSheet(dispatch)))) {
+      for (const lane of lanes) {
+        if (lane.kind !== "model") throw new Error("first-run defaults must select explicit models");
+        const row = byFamily.get(`${lane.provider}:${lane.model}`);
+        if (row === undefined) throw new Error(`unknown first-run model: ${lane.descriptor}`);
+        expect(row.selectableEfforts).toContain(lane.effort);
+      }
     }
-    const providers = new Set(panel.map((descriptor) => descriptor.split(":")[0]));
-    expect(providers.size).toBeGreaterThanOrEqual(2);
-  });
-
-  it("owns the architect default: Astra and Fable at matrix default efforts", () => {
-    expect(architectPanel).toEqual([
-      "codex:gpt-6-astra@high",
-      "claude:fable@max",
-    ]);
-    const byDescriptor = new Set(rows.map(defaultDescriptor));
-    for (const descriptor of architectPanel) {
-      expect(byDescriptor.has(descriptor)).toBe(true);
+    for (const role of ["arena runners", "arena cross-judge pool", "architect runners", "interrogate reviewers"]) {
+      const lanes = parseModelSheet(firstRunSheet(dispatch))[role];
+      expect(lanes).toHaveLength(2);
+      expect(new Set(lanes.map((lane) => lane.kind === "model" ? lane.provider : null)).size).toBe(2);
     }
-    expect(firstRunSheet(setup)).toContain(
-      `architect runners: ${architectPanel.join(", ")}\n`
-    );
+    expect(defaults["arena runners"]).not.toBe(defaults["arena cross-judge pool"]);
   });
 
   it("passes each GPT-6 family's selected model and effort to the existing runner", () => {
@@ -421,35 +386,66 @@ describe("model matrix", () => {
     }
   });
 
-  it("keeps setup's first-run default panel copy aligned with the matrix", () => {
-    const sheet = firstRunSheet(setup);
-    const roles = sheet
-      .split("\n")
-      .filter((line) => line.includes(": "))
-      .map((line) => line.slice(0, line.indexOf(": ")));
-    expect(roles).toEqual([...SHEET_ROLES]);
-    const byFamily = new Map<string, MatrixRow>(
-      rows.map((row) => [`${row.provider}:${row.model}`, row])
-    );
-    for (const descriptor of sheet.match(DESCRIPTOR_RE) ?? []) {
-      const at = descriptor.lastIndexOf("@");
-      const key = descriptor.slice(0, at);
-      const effort = descriptor.slice(at + 1);
-      const row = byFamily.get(key);
-      if (row === undefined) {
-        throw new Error(`unknown first-run descriptor: ${descriptor}`);
-      }
-      expect(effort).toBe(row.defaultEffort);
+  it("keeps setup and every consuming default aligned with the canonical role map", () => {
+    expect(roleDescriptors(setup)).toEqual(defaults);
+    const consumers = [
+      ["feature, refactoring", "poteto-mode/playbooks/feature.md"],
+      ["feature, refactoring", "poteto-mode/playbooks/refactoring.md"],
+      ["bug-fix", "poteto-mode/playbooks/bug-fix.md"],
+      ["perf-issue", "poteto-mode/playbooks/perf-issue.md"],
+      ["hillclimb", "poteto-mode/playbooks/hillclimb.md"],
+      ["how explorer", "how/SKILL.md"],
+      ["how explainer", "how/SKILL.md"],
+      ["why investigators, synthesizer", "why/SKILL.md"],
+      ["reflect tooling, judgment, divergent, synthesizer", "reflect/SKILL.md"],
+      ["swarm workers", "swarm/SKILL.md", "Otherwise use"],
+    ];
+    for (const [role, path, prefix = "default"] of consumers) {
+      expect(readFileSync(join(PLUGIN_ROOT, "skills", path), "utf8"))
+        .toContain(`${prefix} \`${defaults[role]}\``);
     }
-    const expectedPanel = panel.join(", ");
-    for (const role of PANEL_ROLES) {
-      const line = sheet
-        .split("\n")
-        .find((entry) => entry.startsWith(`${role}:`));
-      if (line === undefined) {
-        throw new Error(`missing first-run panel row: ${role}`);
-      }
-      expect(line).toBe(`${role}: ${expectedPanel}`);
+  });
+
+  it("offers a complete OMP preset without bypassing catalog verification or probes", () => {
+    const ids: Readonly<Record<string, string>> = {
+      "claude:opus": "omp:anthropic/claude-opus-5-5",
+      "claude:fable": "omp:anthropic/claude-fable-5-1",
+      "codex:gpt-6.1-sol": "omp:openai-codex/gpt-6.1-sol",
+      "codex:gpt-6-astra": "omp:openai-codex/gpt-6-astra",
+      "codex:gpt-6-luna": "omp:openai-codex/gpt-6-luna",
+      "codex:gpt-6-sol": "omp:openai-codex/gpt-6-sol",
+    };
+    const expected = Object.fromEntries(Object.entries(parseModelSheet(firstRunSheet(dispatch)))
+      .map(([role, lanes]) => [role, lanes.map((lane) => {
+        if (lane.kind !== "model") throw new Error("OMP preset must use explicit models");
+        const id = ids[`${lane.provider}:${lane.model}`];
+        if (id === undefined) throw new Error(`missing OMP preset model: ${lane.descriptor}`);
+        return `${id}@${lane.effort}`;
+      }).join(", ")]));
+    expect(roleDescriptors(setup, "# pstack OMP model configuration")).toEqual(expected);
+    expect(setup).toContain("Catalog verification and exact-descriptor probes are required before saving.");
+    expect(setup).toContain("never replace an existing sheet with the preset");
+    expect(setup).toContain("never fall back to another runtime or model");
+  });
+
+  it("preserves role effort instead of normalizing a family and probes unique descriptors", () => {
+    expect(setup).toContain("Mixed efforts within one family are valid.");
+    expect(setup).toContain("Never normalize one family's lanes to a common effort");
+    expect(setup).toContain("The same model at two efforts requires two probes");
+    expect(setup).toContain("preserving untouched descriptors and lane order");
+    expect(setup).not.toContain("one normalized effort per family");
+    expect(setup).not.toContain("<requested effort for that family>");
+    expect(dispatch).toContain("Matrix Default effort cells are proposals only");
+  });
+
+  it("requires evidence handoff for external Why and Reflect lanes", () => {
+    for (const name of ["why", "reflect"]) {
+      const skill = readFileSync(join(PLUGIN_ROOT, "skills", name, "SKILL.md"), "utf8");
+      expect(skill).toContain("External lanes have no parent MCP access.");
+      expect(skill).toContain("evidence files");
+      expect(skill).toContain("never silently reroute a qualified");
+      expect(skill).toContain("verification gap");
+      expect(skill).not.toContain("keep them native to the parent");
     }
   });
 

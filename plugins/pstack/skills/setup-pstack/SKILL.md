@@ -1,13 +1,39 @@
 ---
 name: setup-pstack
-description: Configure pstack's provider-qualified models, per-family requested effort, and parent-owned routes per role, in the global sheet or a private project sheet. Verifies native and external lanes before writing the override sheet. Use for /setup-pstack, "configure pstack models", "set up pstack models for this project", or changing pstack's model choices.
+description: Configure pstack's provider-qualified models, per-role requested effort, and parent-owned routes per role, in the global sheet or a private project sheet. Verifies native and external lanes before writing the override sheet. Use for /setup-pstack, "configure pstack models", "set up pstack models for this project", or changing pstack's model choices.
 ---
 
 # Setup pstack
 
-For an OMP parent, use the OMP-only setup rules in `poteto-mode/references/codex-tools.md` and `docs/OMP.md`. Choose exact `omp:<provider>/<model>@<effort>` assignments from the user's existing OMP catalog. Do not seed Claude/Codex/Grok CLI defaults, use inherited roles, or translate model IDs by guesswork. Ask which roles and exact models to assign, probe each pair through the OMP runner, then write only the selected model sheet after confirmation. Preserve credentials. OMP workers cannot run shell commands; the parent handles verification. The remaining family matrices describe the other runtimes and do not limit the OMP catalog.
+For an OMP parent, use the OMP-only setup rules in `poteto-mode/references/codex-tools.md` and `docs/OMP.md`. Choose exact `omp:<provider>/<model>@<effort>` assignments from the user's existing OMP catalog. On a first run, propose the OMP preset below only after verifying every exact provider/model ID and requested effort in that catalog. Do not seed Claude/Codex/Grok CLI defaults, use inherited roles, or translate model IDs by guesswork. If a preset ID or effort is unavailable, report it and require an explicit replacement before saving. Probe every distinct descriptor through the OMP runner, then write only the selected model sheet after confirmation. Existing sheets keep their assignments and lane order unless the operator changes them. Preserve credentials. OMP workers cannot run shell commands or use MCPs; the parent handles verification and evidence collection. The remaining family matrices describe the other runtimes and do not limit the OMP catalog.
 
-Configure one portable model sheet for the current parent harness, globally or privately for one project. Read [provider dispatch](../poteto-mode/references/provider-dispatch.md) for model families and [harness integration](../poteto-mode/references/codex-tools.md) for tool and configuration recipes. One family is one `(provider, model)` pair with one requested effort. The model sheet is the only mutable configuration source. No weaker-model fallback.
+Configure one portable model sheet for the current parent harness, globally or privately for one project. Read [provider dispatch](../poteto-mode/references/provider-dispatch.md) for model families and [harness integration](../poteto-mode/references/codex-tools.md) for tool and configuration recipes. One family is one `(provider, model)` pair. Each role lane keeps its own requested effort. The model sheet is the only mutable configuration source. No weaker-model fallback.
+
+## OMP first-run preset
+
+These exact IDs define the proposed OMP-aligned preset. They are candidates until the user's catalog and live probes confirm them. They are not aliases for the other runtimes. Use this complete map only when no OMP sheet was loaded; never replace an existing sheet with the preset. Keep per-role efforts and lane order. The same grouped Why and Reflect choices apply. The parent supplies evidence files inside each worker's permitted checkout because OMP workers have no MCP tools.
+
+```markdown
+# pstack OMP model configuration
+
+feature, refactoring: omp:anthropic/claude-opus-5-5@medium
+bug-fix: omp:openai-codex/gpt-6.1-sol@high
+perf-issue: omp:openai-codex/gpt-6.1-sol@xhigh
+hillclimb: omp:openai-codex/gpt-6.1-sol@xhigh
+judgment and prose: omp:anthropic/claude-opus-5-5@high
+hardest tasks: omp:anthropic/claude-opus-5-5@high
+how explorer: omp:openai-codex/gpt-6-luna@low
+how explainer: omp:anthropic/claude-fable-5-1@high
+why investigators, synthesizer: omp:openai-codex/gpt-6-luna@high
+reflect tooling, judgment, divergent, synthesizer: omp:anthropic/claude-opus-5-5@medium
+arena runners: omp:openai-codex/gpt-6.1-sol@high, omp:anthropic/claude-opus-5-5@high
+arena cross-judge pool: omp:openai-codex/gpt-6-astra@high, omp:anthropic/claude-fable-5-1@high
+swarm workers: omp:openai-codex/gpt-6-sol@medium
+architect runners: omp:anthropic/claude-fable-5-1@high, omp:openai-codex/gpt-6-astra@high
+interrogate reviewers: omp:anthropic/claude-fable-5-1@high, omp:openai-codex/gpt-6-astra@high
+```
+
+Catalog verification and exact-descriptor probes are required before saving. Apply the scope, state-preservation, confirmation, readback, and rollback rules below using the OMP-only integration recipe. Every OMP role must be explicit; unavailable assignments remain named failures and never fall back to another runtime or model.
 
 ## Steps
 
@@ -26,29 +52,27 @@ Outside a git repository, say that only global scope is available and continue w
 
 Read the scoped sheet when it exists. In project scope with no project sheet, load the global sheet instead as the starting assignments and say so; if neither exists, this is a first run. Before matrix validation, normalize only the rolling-alias predecessors that earlier pstack releases generated. A provider-qualified Claude model is migratable when its model component starts with `claude-fable-` or `claude-opus-` and the remaining revision contains only digits and hyphens. Replace that component in memory with `fable` or `opus`, preserving the provider, effort, role, and lane order. Record each original and normalized descriptor for the confirmation in step 7. This migration is valid loaded state and does not require a separate operator choice.
 
-Treat the normalized values as current role-to-family assignments. Overlay those rows on the complete first-run role map in step 7. Materialize any missing documented role row from that map on the next successful write. A duplicate role row is inconsistent state; report it and resolve it before probing. A row whose role is not in the step 7 role map, such as `how critics`, is from a retired role. Drop it and list it at confirmation. A bare host-native slug from an older sheet is also invalid because it does not say which provider owns it. A versioned Claude model outside the two migration families remains inconsistent state. If no sheet was loaded, use the complete first-run role map and the model matrix's Default effort cells.
+Treat the normalized values as current role-to-family assignments. Overlay those rows on the complete first-run role map in step 7. Materialize any missing documented role row from that map on the next successful write. A duplicate role row is inconsistent state; report it and resolve it before probing. A row whose role is not in the step 7 role map, such as `how critics`, is from a retired role. Drop it and list it at confirmation. A bare host-native slug from an older sheet is also invalid because it does not say which provider owns it. A versioned Claude model outside the two migration families remains inconsistent state. If no sheet was loaded, use the complete first-run role map with its explicit per-role efforts. Matrix Default effort cells do not override that map.
 
 Then ask whether to keep these role-to-family assignments or change named roles. Keeping them is the default. Apply only role changes the operator names; never offer a reset of a customized sheet to the first-run assignments. A changed role may use any stock or flex matrix family, any OpenRouter model ID the operator names (`openrouter:<namespace>/<model>`), any OpenCode model ID the operator names (`opencode:<provider>/<model>`), `inherit-parent`, or `auto`.
 
-List every stock and flex family by name when the operator changes a role, so Claude, Codex, Grok, DeepSeek, MiniMax, and OpenRouter are all on offer and any role can move to any of them. Offer every stock family, including Astra, GPT-6.1 Sol, GPT-6 Sol, and Luna, when changing `architect runners` or another configurable role. Read each model, proposed effort, and selectable efforts from its row. The Codex families are separate families even though they share the Codex provider; changing one family's effort does not change another's. GPT-6.1 Sol uses the `sol-6.1` family and GPT-6 Sol the `sol-6` family; the `sol` family keeps GPT-5.6 Sol for sheets that still assign it.
+List every stock and flex family by name when the operator changes a role, so Claude, Codex, Grok, DeepSeek, MiniMax, and OpenRouter are all on offer and any role can move to any of them. Offer every stock family, including Astra, GPT-6.1 Sol, GPT-6 Sol, and Luna, when changing `architect runners` or another configurable role. Read each model, proposed effort, and selectable efforts from its row. The Codex families are separate families even though they share the Codex provider. Changing one role lane's effort does not change another lane, even when both use the same family. GPT-6.1 Sol uses the `sol-6.1` family and GPT-6 Sol the `sol-6` family; the `sol` family keeps GPT-5.6 Sol for sheets that still assign it.
 
-### 3. Parse per-family efforts
+### 3. Parse per-role efforts
 
-Read the model matrices, stock and flex. Every non-alias value must match `<provider>:<model>@<effort>`. Map it to exactly one matrix family by `(provider, model)`; an `openrouter` descriptor maps to the open `openrouter` row whatever its model ID, and an `opencode` descriptor maps to the open `opencode` row the same way. Require its effort to appear in that row's Selectable efforts cell, and collect the effort. `inherit-parent` and `auto` rows carry no family effort.
+Read the model matrices, stock and flex. Every non-alias value must match `<provider>:<model>@<effort>`. Map it to exactly one matrix family by `(provider, model)`; an `openrouter` descriptor maps to the open `openrouter` row whatever its model ID, and an `opencode` descriptor maps to the open `opencode` row the same way. Require each lane's effort to appear in that row's Selectable efforts cell. `inherit-parent` and `auto` rows carry no explicit effort.
 
-An unmatched provider/model, out-of-domain effort, or duplicate role is inconsistent state. Stop, show the conflicting rows verbatim, and ask for an explicit matrix family or alias replacement. If one or more families have mixed efforts, show every conflicting family and role row, then ask for one normalized effort per family from its Selectable efforts cell. Do not invent a precedence rule. Do not probe or write while any inconsistency is unresolved.
+An unmatched provider/model, out-of-domain effort, or duplicate role is inconsistent state. Stop, show the conflicting rows verbatim, and ask for an explicit matrix family or alias replacement. Do not probe or write while any inconsistency is unresolved.
 
-A family is a single `(provider, model)` matrix row. DeepSeek Flash and Pro have independent efforts, as do MiniMax M3 and M3.1 Flash Preview. Each distinct OpenRouter model ID is its own family under the open row, with its own effort and probe, and so is each distinct OpenCode model ID. Never group efforts or deduplicate probes by provider alone.
+Mixed efforts within one family are valid. Preserve each role lane's descriptor and order. Never normalize one family's lanes to a common effort or deduplicate probes by provider or model alone. A family with no non-alias occurrence is unassigned; do not ask for its effort, check its CLI, or probe it. A newly assigned family without an explicit effort takes its matrix Default effort as the proposed value for that lane only.
 
-One distinct effort per family is the current value. A family with no non-alias occurrence is unassigned: do not ask for its effort, check its CLI, or probe it. A family that a step 2 role change newly assigns takes its matrix Default effort as the proposed value.
+### 4. Collect requested effort changes
 
-### 4. Collect one requested effort per family
-
-Ask one effort question for each assigned family. Name each model, its current or proposed value, and the Selectable efforts from its matrix row. Empty input keeps that value. On a first run, state the assigned families' matrix defaults before asking. On a rerun, state the parsed values without offering to reset customized role lanes.
+Show every role lane's current or proposed effort and its family's Selectable efforts. On a first run, use the default role map's efforts. On a rerun, keep the parsed values. Ask which role lanes to change; empty input keeps every effort. Apply changes only to the named role lanes. A family-wide effort change requires an explicit operator request and must list every affected lane before confirmation. Never reset customized lanes to matrix defaults.
 
 ### 5. Probe the requested pairs
 
-Probe only the selected `provider:model@effort` pair of each assigned family. Run one probe per family in the role map, even when two families share a provider. Do not enumerate or offer older models as substitutes. A failed probe writes nothing: report the failing pair and provider, stop, and keep the scoped sheet plus parent integration bytes unchanged. A failed model demands explicit repair or role reassignment before saving. A failed first run creates neither artifact.
+Probe each distinct selected `provider:model@effort` descriptor once. The same model at two efforts requires two probes; identical descriptors across roles share one probe. Do not enumerate or offer older models as substitutes. A failed probe writes nothing: report the failing pair and provider, stop, and keep the scoped sheet plus parent integration bytes unchanged. A failed model demands explicit repair or role reassignment before saving. A failed first run creates neither artifact.
 
 Use each descriptor's route from the selected adapter. A native pair uses that adapter's native one-turn invocation; an external pair uses `pstack-runner` with the explicit parent, provider, model, and selected effort. The runner owns CLI/authentication/model preflight. Keep every exact-pair receipt or native transcript. Do not repeat routing by family or invent another harness detector.
 
@@ -74,13 +98,13 @@ Different models sharing a provider count as one provider, even when their effor
 
 Validate panel diversity: `arena runners` and `interrogate reviewers` must span at least two distinct providers. A single-provider panel is written only after the operator explicitly confirms the reduced diversity; record that confirmation in the setup report.
 
-Rewrite every matrix-family descriptor to `provider:model@<requested effort for that family>`. Leave `inherit-parent` and `auto` unchanged. An effort-only rerun cannot change a role's family. Changing Grok's effort updates every Grok occurrence and does not move a Sol role onto Grok. Refuse an unqualified slug, an unavailable route, a model outside the stock and flex matrix families, an OpenRouter ID without a namespace or from the `openrouter/*` routers, an OpenCode ID without its `<provider>/` prefix, or a provider/model mismatch.
+Render each lane with its own selected effort, preserving untouched descriptors and lane order. Leave `inherit-parent` and `auto` unchanged. An effort-only rerun cannot change a role's family or another lane's effort. Refuse an unqualified slug, an unavailable route, a model outside the stock and flex matrix families, an OpenRouter ID without a namespace or from the `openrouter/*` routers, an OpenCode ID without its `<provider>/` prefix, or a provider/model mismatch.
 
 ### 7. Confirm and commit
 
 Show any rolling-alias migrations as original and normalized descriptors and any retired-role rows dropped in step 2. Then show the scope, the sheet path, the route table for this parent, and every rendered role and descriptor. Ask for confirmation before writing.
 
-Why and Reflect require the parent's live MCP surface. Keep their investigator, reviewer, and synthesizer roles on `inherit-parent` or `auto`; the bounded external runner deliberately omits ambient MCPs. `inherit-parent` and `auto` always validate, but say when they reduce a panel's provider diversity. For panel roles, one lane runs per entry. The list length is the fan-out count. `arena cross-judge pool` is a list from which Arena chooses a provider different from the parent and base candidate when possible. `swarm workers` is the default for every worker unless a race explicitly assigns another descriptor.
+Why and Reflect default to the grouped descriptors below. External lanes have no parent MCP access. The parent must collect and share task-scoped evidence files, or report inaccessible evidence. `inherit-parent` and `auto` remain supported explicit choices for live parent MCP access; never silently reroute a qualified descriptor. `inherit-parent` and `auto` always validate, but say when they reduce a panel's provider diversity. For panel roles, one lane runs per entry. The list length is the fan-out count. `arena cross-judge pool` is a list from which Arena chooses a provider different from the parent and base candidate when possible. `swarm workers` is the default for every worker unless a race explicitly assigns another descriptor.
 
 Every non-alias value must match `<provider>:<model>@<effort>` and must have passed step 5.
 
@@ -91,21 +115,21 @@ After the operator confirms, pass the in-memory render from step 6 to step 8's w
 
 Provider-qualified per-role choices. Read the installed pstack provider-dispatch reference before dispatching a configured role. Every documented role remains present. `inherit-parent` and `auto` use the parent model natively and still count as one panel lane.
 
-feature, refactoring: codex:gpt-6.1-sol@high
+feature, refactoring: claude:opus@medium
 bug-fix: codex:gpt-6.1-sol@high
-perf-issue: codex:gpt-6.1-sol@high
-hillclimb: codex:gpt-6.1-sol@high
-judgment and prose: claude:fable@max
-hardest tasks: claude:fable@max
-how explorer: codex:gpt-6-luna@high
-how explainer: claude:fable@max
-why investigators, synthesizer: inherit-parent
-reflect tooling, judgment, divergent, synthesizer: inherit-parent
-arena runners: claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max
-arena cross-judge pool: claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max
-swarm workers: codex:gpt-6-luna@high
-architect runners: codex:gpt-6-astra@high, claude:fable@max
-interrogate reviewers: claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max
+perf-issue: codex:gpt-6.1-sol@xhigh
+hillclimb: codex:gpt-6.1-sol@xhigh
+judgment and prose: claude:opus@high
+hardest tasks: claude:opus@high
+how explorer: codex:gpt-6-luna@low
+how explainer: claude:fable@high
+why investigators, synthesizer: codex:gpt-6-luna@high
+reflect tooling, judgment, divergent, synthesizer: claude:opus@medium
+arena runners: codex:gpt-6.1-sol@high, claude:opus@high
+arena cross-judge pool: codex:gpt-6-astra@high, claude:fable@high
+swarm workers: codex:gpt-6-sol@medium
+architect runners: claude:fable@high, codex:gpt-6-astra@high
+interrogate reviewers: claude:fable@high, codex:gpt-6-astra@high
 ```
 
 ### 8. Wire it in

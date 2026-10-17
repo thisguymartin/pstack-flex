@@ -19,27 +19,39 @@ pstack model choices are provider-qualified descriptors:
 | sol-6 | - | codex | gpt-6-sol | high | low medium high xhigh max | - |
 | luna | - | codex | gpt-6-luna | high | low medium high xhigh max | - |
 
-The allowed effort universe is exactly `low`, `medium`, `high`, `xhigh`, `max`. First-run requested efforts are the Default effort cell of each row. A Claude-native agent stem of `-` means the family has no Claude-native agent. Otherwise the shipped agent name is `pstack-<stem>-<effort>`. `-` in Upstream pstack choice means Cursor's pstack has no default for that family; the row is fork-owned.
+The allowed effort universe is exactly `low`, `medium`, `high`, `xhigh`, `max`. The default role map below owns first-run model choices and efforts. Matrix Default effort cells are proposals only when setup assigns a new family without an explicit effort. A Claude-native agent stem of `-` means the family has no Claude-native agent. Otherwise the shipped agent name is `pstack-<stem>-<effort>`. `-` in Upstream pstack choice means Cursor's pstack has no default for that family; the row is fork-owned.
 
 `fable` and `opus` are Claude Code's rolling aliases. Claude resolves each alias to the latest available family revision. A runner receipt keeps the requested alias in `model` and the concrete provider-reported revision in `reportedModel`; verification accepts only a numeric `claude-fable-*` or `claude-opus-*` revision from the matching family.
 
-The `astra`, `sol-6.1`, `sol-6`, and `luna` rows are the GPT-6 Codex families (pstack-flex addition). These Codex families use native `spawn_agent` under a Codex parent and the external Codex runner under a Claude Code parent. Each is its own family with its own requested effort and probe; `sol-6.1`, `sol-6`, and `sol` are independent of each other, so an existing GPT-6 Sol or GPT-5.6 Sol assignment stays unchanged until setup reassigns the role. All Codex families count as one provider for panel diversity.
+The `astra`, `sol-6.1`, `sol-6`, and `luna` rows are the GPT-6 Codex families (pstack-flex addition). These Codex families use native `spawn_agent` under a Codex parent and the external Codex runner under a Claude Code parent. Each is its own family. Probe every distinct model and effort descriptor. The `sol-6.1`, `sol-6`, and `sol` are independent of each other, so an existing GPT-6 Sol or GPT-5.6 Sol assignment stays unchanged until setup reassigns the role. All Codex families count as one provider for panel diversity.
 
-## Default panel
+## Default role map
 
-The first-run panel roles (`arena runners`, `arena cross-judge pool`, `interrogate reviewers`) use these four lanes, one per entry, at each family's default effort:
+This complete map is the first-run default for Claude Code, Codex, and OpenCode. Setup copies it, and consuming skills and playbooks use the matching role when no configured assignment exists. OMP requires the separately verified preset in [setup-pstack](../../setup-pstack/SKILL.md). Existing sheets keep their configured choices, efforts, and lane order.
 
-`claude:fable@max, codex:gpt-6-astra@high, grok:grok-4.7@xhigh, claude:opus@max`
+```markdown
+# pstack model configuration
 
-This line is the single source for the panel default. `setup-pstack`'s first-run sheet and the `arena` and `interrogate` skills copy it verbatim; the static invariant check fails when they drift. Solo code-writing roles (`feature, refactoring`, `bug-fix`, `perf-issue`, `hillclimb`) default to the `sol-6.1` row; exploration and swarm roles default to the `luna` row.
+feature, refactoring: claude:opus@medium
+bug-fix: codex:gpt-6.1-sol@high
+perf-issue: codex:gpt-6.1-sol@xhigh
+hillclimb: codex:gpt-6.1-sol@xhigh
+judgment and prose: claude:opus@high
+hardest tasks: claude:opus@high
+how explorer: codex:gpt-6-luna@low
+how explainer: claude:fable@high
+why investigators, synthesizer: codex:gpt-6-luna@high
+reflect tooling, judgment, divergent, synthesizer: claude:opus@medium
+arena runners: codex:gpt-6.1-sol@high, claude:opus@high
+arena cross-judge pool: codex:gpt-6-astra@high, claude:fable@high
+swarm workers: codex:gpt-6-sol@medium
+architect runners: claude:fable@high, codex:gpt-6-astra@high
+interrogate reviewers: claude:fable@high, codex:gpt-6-astra@high
+```
 
-## Default architect panel
+Effort belongs to each role lane, not to a family globally. Opus medium and high, Sol high and xhigh, and Luna low and high are valid in the same sheet. Probe each distinct `provider:model@effort` once. Runner and reviewer panels run one lane per entry in the listed order. Arena selects one cross-judge from its independent pool.
 
-The first-run `architect runners` role uses two lanes, one per entry, at each family's default effort:
-
-`codex:gpt-6-astra@high, claude:fable@max`
-
-This line is the single source for the architect default. `setup-pstack`'s first-run sheet and the `architect` skill copy it verbatim; the static invariant check fails when they drift.
+Why and Reflect retain their existing grouped role keys. Why uses Luna high for investigators and synthesis. Reflect uses Opus medium for tooling, judgment, divergent review, and synthesis. These grouped choices trade separate investigator, tooling, and synthesizer models for compatibility with existing sheets. External lanes have no parent MCP access; the parent must collect and share evidence files or report inaccessible evidence. `inherit-parent` and `auto` remain supported choices when live parent MCP access is required.
 
 ## Sheet scope
 
@@ -59,9 +71,9 @@ pstack-flex addition. These lanes are additive. A flex lane runs the stock `clau
 | minimax-preview | minimax | MiniMax-M3.1-Flash-Preview | high | low medium high xhigh max | MINIMAX_API_KEY | https://api.minimax.io/anthropic |
 | openrouter | openrouter | <any OpenRouter model ID> | high | low medium high xhigh max | OPENROUTER_API_KEY | https://openrouter.ai/api |
 
-A family identifies one `(provider, model)` pair, not an entire provider. The existing `deepseek` and `minimax` family names and descriptors remain valid. `deepseek-pro` and `minimax-preview` are additional choices with independent requested efforts. Multiple models from one provider still count as one provider for panel diversity.
+A family identifies one `(provider, model)` pair, not an entire provider. The existing `deepseek` and `minimax` family names and descriptors remain valid. `deepseek-pro` and `minimax-preview` are additional choices with independently selectable efforts. Multiple models from one provider still count as one provider for panel diversity.
 
-The `openrouter` row is open. Its Model cell stands for any model ID in OpenRouter's catalog, written with its namespace, such as `openrouter:moonshotai/kimi-k3@high`. Split a descriptor at the first `:` and the last `@`: an OpenRouter model ID carries a `/` and can carry its own `:` or `~`, as in `openrouter:z-ai/glm-5.3:free@high`. There is no allowlist; setup's live probe on the chosen model is the gate. Each distinct OpenRouter model ID is its own family with its own requested effort and probe, and the row supplies the default and selectable efforts. The launcher refuses an ID without a namespace, and it refuses OpenRouter's own `openrouter/*` routers (`openrouter/auto`, `openrouter/free`) because they pick the model server-side; every model a router could pick is reachable by its own ID. OpenRouter maps the requested effort onto each model's reasoning controls ([reasoning tokens](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens), checked 2026-10-05); a receipt proves the request, not the applied depth. The runner sets `ANTHROPIC_API_KEY` to an empty string for this provider, as [OpenRouter's Claude Code guide](https://openrouter.ai/docs/guides/guides/claude-code-integration) requires. Data-collection and zero-data-retention routing, and the key's credit limit, are OpenRouter account settings, not pstack configuration.
+The `openrouter` row is open. Its Model cell stands for any model ID in OpenRouter's catalog, written with its namespace, such as `openrouter:moonshotai/kimi-k3@high`. Split a descriptor at the first `:` and the last `@`: an OpenRouter model ID carries a `/` and can carry its own `:` or `~`, as in `openrouter:z-ai/glm-5.3:free@high`. There is no allowlist; setup's live probe on the chosen model is the gate. Each distinct OpenRouter model ID is its own family. Its role lanes may use different requested efforts; probe each distinct descriptor. The row supplies the proposed default and selectable efforts. The launcher refuses an ID without a namespace, and it refuses OpenRouter's own `openrouter/*` routers (`openrouter/auto`, `openrouter/free`) because they pick the model server-side; every model a router could pick is reachable by its own ID. OpenRouter maps the requested effort onto each model's reasoning controls ([reasoning tokens](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens), checked 2026-10-05); a receipt proves the request, not the applied depth. The runner sets `ANTHROPIC_API_KEY` to an empty string for this provider, as [OpenRouter's Claude Code guide](https://openrouter.ai/docs/guides/guides/claude-code-integration) requires. Data-collection and zero-data-retention routing, and the key's credit limit, are OpenRouter account settings, not pstack configuration.
 
 MiniMax preview requires Token Plan access; set `MINIMAX_API_KEY` to the eligible subscription key. A pay-as-you-go key is not proof of preview access. The preview always thinks and supports `low` through `max`; do not disable thinking. M3 thinking is off by default at the API and requires adaptive thinking to enable it; its effort flag does not imply preview-style depth control. Selectable efforts are runner requests, not a claim that every provider applies five distinct reasoning levels. Verify CLI forwarding and model access with live probes. Sources: [MiniMax models](https://platform.minimax.io/docs/guides/models-intro), [MiniMax thinking controls](https://platform.minimax.io/docs/api-reference/text-anthropic-api), [DeepSeek Anthropic compatibility](https://api-docs.deepseek.com/guides/anthropic_api) (checked 2026-09-27).
 
@@ -79,7 +91,7 @@ pstack-flex addition, beta: verified at the runner level, not yet from a real se
 |---|---|---|---|---|---|
 | opencode | opencode | <any OpenCode model ID> | high | low medium high xhigh max | OpenCode's own |
 
-The row is open. Its Model cell stands for any ID that `opencode models` lists, written as OpenCode's `<provider>/<model>`, such as `opencode:openrouter/z-ai/glm-5.3@high`. Split a descriptor at the first `:` and the last `@`. Each distinct model ID is its own family with its own requested effort and probe, and setup's live probe is the gate. The effort becomes OpenCode's `--variant`, and each model offers its own variants (`opencode models <provider> --verbose`). OpenCode silently ignores a variant the model does not offer, so the launcher's preflight refuses that effort as `unavailable-model` and names the offered ones. A model that offers no variants cannot take a pstack effort and cannot run as a lane. An `opencode` lane routes through the launcher under every parent, OpenCode's included, because OpenCode's native `task` subagent cannot choose a model.
+The row is open. Its Model cell stands for any ID that `opencode models` lists, written as OpenCode's `<provider>/<model>`, such as `opencode:openrouter/z-ai/glm-5.3@high`. Split a descriptor at the first `:` and the last `@`. Each distinct model ID is its own family. Its role lanes may use different requested efforts; setup probes each distinct descriptor. The effort becomes OpenCode's `--variant`, and each model offers its own variants (`opencode models <provider> --verbose`). OpenCode silently ignores a variant the model does not offer, so the launcher's preflight refuses that effort as `unavailable-model` and names the offered ones. A model that offers no variants cannot take a pstack effort and cannot run as a lane. An `opencode` lane routes through the launcher under every parent, OpenCode's included, because OpenCode's native `task` subagent cannot choose a model.
 
 The lane runs with `--pure`, Claude Code compatibility off, and a private in-memory OpenCode database (`OPENCODE_DB=:memory:`). OpenCode 1.18.31 can lock a shared database during parallel startup. Each invocation uses a fresh agent name with its own deny-first permissions; named `plan` and `build` agents would deep-merge ambient permissions. Read-only lanes can read, list, glob, and grep. Writers can also edit files inside their worktree. Subagents, skills, web access, MCP tools, and shell commands are denied. OpenCode has no shell sandbox, and even Git reads can execute external helpers, so these lanes cannot run Git commands, tests, or builds. Report such requirements as unsupported. Receipts use `modelEvidence: "pinned-argv"` because OpenCode's JSON does not name the answering model, and `costUsd: null` because its cost is a catalog estimate.
 
@@ -91,7 +103,7 @@ Normalize configured descriptors before matching them to the matrix or choosing 
 
 This read-time rule makes an older installed sheet use the latest family revision immediately without writing user files. Once per parent run, report that the persisted sheet is stale and that `/setup-pstack` will rewrite it after its normal probes and confirmation. Unknown versioned Claude models remain invalid. The external runner rejects a missed Fable or Opus version pin instead of silently executing it.
 
-`fast` is part of Cursor's Grok selector, not a Grok Build CLI model or effort flag. The portable Grok route pins the current CLI model `grok-4.7`. The first-run Grok effort is `xhigh`.
+`fast` is part of Cursor's Grok selector, not a Grok Build CLI model or effort flag. The portable Grok route pins the current CLI model `grok-4.7`. The proposed effort for a newly assigned Grok family is `xhigh`.
 
 ## The parent owns the route
 
@@ -123,7 +135,7 @@ pstack-runner \
   [--timeout <seconds>]
 ```
 
-Pass arguments as an argv array or quote every path. Never interpolate prompt text into a shell command. The launcher preflights the assigned CLI and authentication, invokes the model exactly once, disables recursive agents and ambient skill dispatch where the CLI supports it, restricts the built-in tool surface, and records the exact provider/model/effort flags. External lanes do not receive the parent's MCP surface. Keep MCP-dependent Why and Reflect roles on `inherit-parent` or `auto`. The launcher never falls back.
+Pass arguments as an argv array or quote every path. Never interpolate prompt text into a shell command. The launcher preflights the assigned CLI and authentication, invokes the model exactly once, disables recursive agents and ambient skill dispatch where the CLI supports it, restricts the built-in tool surface, and records the exact provider/model/effort flags. External lanes do not receive the parent's MCP surface. For Why and Reflect, the parent collects evidence through its connected tools, writes task-scoped evidence files, and shares their paths with the assigned lanes. Report any inaccessible evidence and verification gaps. Choose `inherit-parent` or `auto` explicitly when a role needs live parent MCP access; never silently reroute a qualified descriptor. The launcher never falls back.
 
 pstack-flex: add `--label <role>` to name the lane in the agent monitor, using the role it fills, such as `--label "arena cross-judge"` or `--label "interrogate reviewer 2"`. The label is display text only; the launcher never routes on it. While the lane journal is on (starting [psf-monitor](https://github.com/thisguymartin/psf-monitor) turns it on), the launcher also records the lane's start, its output as it streams, and a copy of its receipt under `~/.pstack-flex/lanes/`, so psf-monitor can show the lane while it runs. A journal failure never changes the lane's receipt, exit status, or output.
 
