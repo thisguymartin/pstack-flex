@@ -24,7 +24,7 @@ The fork owns these adaptations:
 | --- | --- |
 | Harness metadata and configuration | `poteto-mode/scripts/harnesses.ts`, `configuration.ts`, and `pstack-context`; scope paths, descriptor parsing, and explicit parent context |
 | Model choices | Fork families and default panels in `provider-dispatch.md`; setup's first-run sheet and matching role defaults in skills and playbooks |
-| Setup | `setup-pstack/SKILL.md`; scope selection, assignment-first questions, family probes, confirmation, and transactional writes |
+| Setup | `setup-pstack/SKILL.md`; scope selection, assignment-first questions, exact-descriptor probes, confirmation, and transactional writes |
 | Provider execution | `poteto-mode/scripts/runner/`; gateway specs, OpenCode lanes, isolation, model evidence, and tests |
 | Tool translation | `poteto-mode/references/codex-tools.md`; Claude-native workflows mapped to Codex and OpenCode tools |
 | Invocation | `hooks/session-start-context.md`; pstack skills start on request or a standing instruction |
@@ -57,7 +57,7 @@ Same-provider Claude and Codex descriptors stay native. OpenCode beta uses the e
 - Cursor's `automations/benny/`, `make-bot-ui`, and sticky-mode metadata require Cursor's event or UI runtime. The Cursor usage guide stays [upstream](https://github.com/cursor/plugins/tree/main/pstack/docs/guide).
 - Upstream planning documents describe its own issue queue. Do not import them or retain completed plans here; durable work belongs in this fork's GitHub Issues.
 - `disable-model-invocation: true` from `73f8be4` is omitted for `how`, `why`, `unslop`, and `typescript-best-practices` because it blocks workflow invocation on Claude Code.
-- Solo code defaults from `23a56e2`, `889ec4b`, and `70b2dc8` stay on the fork's configured Codex default. Why and Reflect defaults remain `inherit-parent` to retain parent MCP access.
+- Model defaults from `23a56e2`, `889ec4b`, and `70b2dc8` use the fork's role-specific map. Feature/refactoring defaults to Opus medium; bug fixes use Sol 6.1 high and performance/hillclimb use Sol 6.1 xhigh. Why retains its grouped key on Luna high and Reflect its grouped key on Opus medium. External lanes require parent-collected evidence files; `inherit-parent` and `auto` remain explicit choices for live MCP access. Issue [#57](https://github.com/thisguymartin/pstack-flex/issues/57) tracks these defaults and the separately catalog-verified OMP preset.
 - Setup's budget question and effort reduction from `5bf2b15` are omitted. Requested effort is never silently reduced.
 - Configured-model fallback from `12d587d` is omitted. Unavailable models remain named dropouts.
 - Expected-runtime stuck detection from `70b2dc8` is omitted. A stuck lane requires affirmative failure evidence; there is no implicit timeout.

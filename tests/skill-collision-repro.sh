@@ -83,55 +83,44 @@ else
   note "ok: active Fable and Opus configuration uses rolling aliases"
 fi
 
-# Static invariant (CHANGES maintenance note): provider-dispatch's "## Default panel"
-# line is the default panel. The setup-pstack panel rows and the arena and
-# interrogate defaults copy it verbatim. "## Default architect panel" plays the
-# same part for architect runners.
 setup="$repo/plugins/pstack/skills/setup-pstack/SKILL.md"
 dispatch="$repo/plugins/pstack/skills/poteto-mode/references/provider-dispatch.md"
-quad_of() { { grep -oE '(claude|codex|grok):[a-z0-9.-]+@(low|medium|high|xhigh|max)' || true; } | tr '\n' ' ' | sed 's/ $//'; }
-panel_under() { awk -v heading="$1" '
-  $0 == heading { in_panel = 1; next }
-  in_panel && /^## / { exit }
-  in_panel && /^`/ { print; exit }
-' "$dispatch" | quad_of; }
-canon_panel="$(panel_under "## Default panel")"
-canon_architect="$(panel_under "## Default architect panel")"
+descriptors_of() { { grep -oE '(claude|codex|grok):[a-z0-9.-]+@(low|medium|high|xhigh|max)' || true; } | tr '\n' ' ' | sed 's/ $//'; }
+sheet_of() { awk '
+  $0 == "# pstack model configuration" { in_sheet = 1; next }
+  in_sheet && /^```$/ { exit }
+  in_sheet { print }
+' "$1"; }
+role_of() { sheet_of "$2" | awk -v role="$1" '
+  index($0, role ": ") == 1 { print substr($0, length(role) + 3) }
+'; }
+canonical_roles="$(sheet_of "$dispatch" | grep -E '^[a-z][a-z ,_-]*: ' || true)"
+setup_roles="$(sheet_of "$setup" | grep -E '^[a-z][a-z ,_-]*: ' || true)"
 panel_bad=""
-[ -n "$canon_panel" ] || panel_bad="could not read the canonical panel from $dispatch"$'\n'
-[ -n "$canon_architect" ] || panel_bad="${panel_bad}could not read the canonical architect panel from $dispatch"$'\n'
-# Anchor on the panel's last slug rather than a hard-coded one, so a model swap in
-# setup-pstack cannot leave this check hunting for a slug nobody ships any more.
-# arena and architect each state their panel on one line; interrogate lists it
-# as one slug per row of its Reviewer A/B/C/D table (upstream #167).
-for name in arena architect; do
-  skill="$repo/plugins/pstack/skills/$name/SKILL.md"
-  want="$canon_panel"
-  [ "$name" = architect ] && want="$canon_architect"
-  anchor="${want##* }"
-  n="$(grep -Fc "$anchor" "$skill" || true)"
-  if [ "$n" != "1" ]; then
-    panel_bad="$panel_bad$skill: expected exactly 1 default-panel line, found $n"$'\n'
-    continue
-  fi
-  got="$(grep -F "$anchor" "$skill" | quad_of)"
-  [ "$got" = "$want" ] || panel_bad="$panel_bad$skill: [$got] != [$want]"$'\n'
-done
+if [ -z "$canonical_roles" ] || [ "$canonical_roles" != "$setup_roles" ]; then
+  panel_bad="setup does not copy the complete canonical role map"$'\n'
+fi
+canon_arena="$(role_of "arena runners" "$dispatch" | descriptors_of)"
+canon_judges="$(role_of "arena cross-judge pool" "$dispatch" | descriptors_of)"
+canon_architect="$(role_of "architect runners" "$dispatch" | descriptors_of)"
+canon_interrogate="$(role_of "interrogate reviewers" "$dispatch" | descriptors_of)"
+arena="$repo/plugins/pstack/skills/arena/SKILL.md"
+got="$(grep -F '3. Pick the runners.' "$arena" | descriptors_of)"
+[ "$got" = "$canon_arena" ] || panel_bad="${panel_bad}arena runners: [$got] != [$canon_arena]"$'\n'
+got="$(grep -F 'After all Phase B candidates complete' "$arena" | descriptors_of)"
+[ "$got" = "$canon_judges" ] || panel_bad="${panel_bad}arena cross-judges: [$got] != [$canon_judges]"$'\n'
+architect="$repo/plugins/pstack/skills/architect/SKILL.md"
+got="$(grep -F 'Take the runners from' "$architect" | descriptors_of)"
+[ "$got" = "$canon_architect" ] || panel_bad="${panel_bad}architect runners: [$got] != [$canon_architect]"$'\n'
 interrogate="$repo/plugins/pstack/skills/interrogate/SKILL.md"
-got="$(grep -E '^\| Reviewer [A-Z] \|' "$interrogate" | quad_of)"
-[ "$got" = "$canon_panel" ] || panel_bad="$panel_bad$interrogate reviewer table: [$got] != [$canon_panel]"$'\n'
-while IFS= read -r line; do
-  got="$(printf '%s\n' "$line" | quad_of)"
-  [ "$got" = "$canon_panel" ] || panel_bad="$panel_bad$setup role row: [$got] != [$canon_panel]"$'\n'
-done < <(grep -E '^(arena runners|arena cross-judge pool|interrogate reviewers):' "$setup")
-got="$(grep -E '^architect runners:' "$setup" | quad_of)"
-[ "$got" = "$canon_architect" ] || panel_bad="$panel_bad$setup architect runners: [$got] != [$canon_architect]"$'\n'
+got="$(grep -E '^\| Reviewer [A-Z] \|' "$interrogate" | descriptors_of)"
+[ "$got" = "$canon_interrogate" ] || panel_bad="${panel_bad}interrogate reviewers: [$got] != [$canon_interrogate]"$'\n'
 if [ -n "$panel_bad" ]; then
-  note "FAIL: the default model panel is not identical across provider dispatch, the panel skills, and setup-pstack:"
+  note "FAIL: role defaults differ across provider dispatch, consuming skills, and setup:"
   note "$panel_bad"
   fail=1
 else
-  note "ok: default model panel identical across provider dispatch + 3 panel skills + setup-pstack ($canon_panel; architect $canon_architect)"
+  note "ok: complete role map and ordered panel defaults match provider dispatch"
 fi
 
 plugin="$repo/plugins/pstack"
@@ -374,33 +363,23 @@ else
   note "ok: routed skills stay model-invocable"
 fi
 
-sol_descriptor="$(awk -F '|' '
-  $2 ~ /^[[:space:]]*sol-6\.1[[:space:]]*$/ {
-    for (i = 4; i <= 6; i++) gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i)
-    print $4 ":" $5 "@" $6
-  }
-' "$dispatch")"
-solo_code_bad=""
-if [ -z "$sol_descriptor" ]; then
-  solo_code_bad="could not read the sol-6.1 row from $dispatch"$'\n'
-fi
-for role in bug-fix perf-issue hillclimb; do
-  setup_descriptor="$(sed -n "s/^${role}: //p" "$setup")"
-  if [ "$setup_descriptor" != "$sol_descriptor" ]; then
-    solo_code_bad="${solo_code_bad}${setup} ${role}: [${setup_descriptor}] != [${sol_descriptor}]"$'\n'
-  fi
-  role_playbook="$plugin/skills/poteto-mode/playbooks/$role.md"
-  playbook_descriptor="$(sed -n 's/.*default `\([^`]*\)`.*/\1/p' "$role_playbook")"
-  if [ "$playbook_descriptor" != "$sol_descriptor" ]; then
-    solo_code_bad="${solo_code_bad}${role_playbook}: [${playbook_descriptor}] != [${sol_descriptor}]"$'\n'
+code_role_bad=""
+for entry in 'feature, refactoring|feature' 'feature, refactoring|refactoring' 'bug-fix|bug-fix' 'perf-issue|perf-issue' 'hillclimb|hillclimb'; do
+  role="${entry%|*}"
+  playbook="${entry#*|}"
+  expected="$(role_of "$role" "$dispatch")"
+  role_playbook="$plugin/skills/poteto-mode/playbooks/$playbook.md"
+  got="$(sed -n 's/.*default `\([^`]*\)`.*/\1/p' "$role_playbook")"
+  if [ -z "$expected" ] || [ "$got" != "$expected" ]; then
+    code_role_bad="${code_role_bad}${role_playbook}: [$got] != [$expected]"$'\n'
   fi
 done
-if [ -n "$solo_code_bad" ]; then
-  note "FAIL: solo code roles must use the sol-6.1 row:"
-  note "$solo_code_bad"
+if [ -n "$code_role_bad" ]; then
+  note "FAIL: code playbooks differ from their canonical role defaults:"
+  note "$code_role_bad"
   fail=1
 else
-  note "ok: solo code roles stay on the sol-6.1 row ($sol_descriptor)"
+  note "ok: code playbooks preserve their role-specific models and efforts"
 fi
 
 codex_manifest="$plugin/.codex-plugin/plugin.json"

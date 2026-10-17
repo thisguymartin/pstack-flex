@@ -26,7 +26,7 @@ The N candidates will receive the same prompt, so the prompt is the contract.
 
 1. State the artifact each candidate is producing.
 2. Derive the rubric. State what success looks like for *this* task, then turn it into 3-6 concrete gradeable criteria. The rubric is the picker's tool in Phase D. Candidates only see the task.
-3. Pick the runners. Use `arena runners` from the current harness's pstack model sheet when present. Otherwise default to one each on `claude:fable@max`, `codex:gpt-6-astra@high`, `grok:grok-4.7@xhigh`, `claude:opus@max`. Spawn more when the arena covers multiple design directions. Same descriptor N times when the work is generation-bound rather than judgment-sensitive.
+3. Pick the runners. Use `arena runners` from the current harness's pstack model sheet when present. Otherwise default to one each on `codex:gpt-6.1-sol@high`, `claude:opus@high`. Spawn more when the arena covers multiple design directions. Same descriptor N times when the work is generation-bound rather than judgment-sensitive.
 4. Assign output paths. Each candidate writes to its own location (a git worktree where possible, otherwise `/tmp/arena-<slug>/candidate-<n>/`), per the **separate-before-serializing-shared-state** principle skill.
 
 ## Phase B: Fan out
@@ -39,7 +39,7 @@ An external lane counts only when its receipt says `complete` and carries either
 
 ## Phase C: Cross-judge
 
-After all Phase B candidates complete, choose the judge descriptor from `arena cross-judge pool` in the current harness's pstack model sheet when present, otherwise from the runner defaults above. Prefer a provider different from the parent and the likely base candidate. Dispatch one read-only judge through the provider contract. It sees the rubric and completed candidates by path label, scores each criterion, and recommends a base with rationale. It runs in parallel with the parent's reading in Phase D, not with the candidates themselves. Don't dispatch the judge while candidates are still writing.
+After all Phase B candidates complete, choose the judge descriptor from `arena cross-judge pool` in the current harness's pstack model sheet when present, otherwise from `codex:gpt-6-astra@high`, `claude:fable@high`. Prefer a provider different from the parent and the likely base candidate. Dispatch one read-only judge through the provider contract. It sees the rubric and completed candidates by path label, scores each criterion, and recommends a base with rationale. It runs in parallel with the parent's reading in Phase D, not with the candidates themselves. Don't dispatch the judge while candidates are still writing.
 
 ## Phase D: Pick a base
 

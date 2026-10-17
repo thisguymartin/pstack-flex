@@ -1,3 +1,5 @@
+Use the assigned tools or parent-supplied evidence files. An external lane has no parent MCP access. Do not claim searches you did not run; identify supplied evidence and its provenance, and report missing searches for the parent to collect or mark inaccessible.
+
 # Investigator Prompt Template
 
 Build each investigator's prompt from this template. Fill in the placeholders. Append the single category playbook `sources/<source>.md` matching this investigator's evidence category (see `source-playbook.md` for the index). If the target code looks defensive (null checks, retry logic, timeout handling, rate limiting, feature flags, egress guards, OOM handlers), also append `sources/incident-postmortem.md` for the incident-flavored queries to run inside its own source.

@@ -80,7 +80,7 @@ Use pstack:poteto-mode. Add saved filters to search. Verify it in the app.
 
 In OpenCode beta, ask for `setup-pstack`, then `poteto-mode` by their bare names.
 
-Setup asks for global or project scope, role assignments, and one effort per assigned model family. It probes each assigned family and writes only after all probes pass and you confirm. Existing assignments stay until you change them. See the [model matrix and dispatch contract](plugins/pstack/skills/poteto-mode/references/provider-dispatch.md) for supported descriptors and defaults.
+Setup asks for global or project scope and role assignments with an effort for each lane. The same model may use different efforts across roles. It probes every distinct descriptor and writes only after all probes pass and you confirm. Existing assignments, efforts, and lane order stay until you change them. First-run defaults include Opus medium for features, Sol 6.1 high for fixes and xhigh for performance work, and separate runner and cross-judge panels. OMP uses its complete catalog-verified preset. Why and Reflect require the parent to share evidence files when their configured lanes lack live MCP access. See the [model matrix and dispatch contract](plugins/pstack/skills/poteto-mode/references/provider-dispatch.md) for supported descriptors and defaults.
 
 Each app has its own global sheet. A project sheet replaces that app's global sheet for the whole repository, including its worktrees. See [sheet paths and overrides](docs/reference.md#model-sheets). Rerun setup to change assignments with a live probe.
 

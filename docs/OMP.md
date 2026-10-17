@@ -41,7 +41,7 @@ The first `omp` selects the execution adapter. The part after the colon is the e
 
 OMP-specific efforts are `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`. Select one the model supports. `off` allows non-reasoning models. Unsupported effort fails before inference. Missing roles, `auto`, `inherit-parent`, wildcard selectors and other runtime descriptors are rejected. Do not use routing aliases such as OpenRouter's automatic model router.
 
-Use the shared `setup-pstack` skill inside the parent to choose and probe assignments. OMP setup writes only the model sheet. It never writes an `instructions` array or credentials into OMP configuration. Adding a role does not require an OMP source change.
+Use the shared `setup-pstack` skill inside the parent to choose and probe assignments. It includes a complete [OMP first-run preset](../plugins/pstack/skills/setup-pstack/SKILL.md#omp-first-run-preset) with exact Anthropic and OpenAI Codex IDs. Verify every ID and requested effort against your existing OMP catalog, then probe every distinct descriptor before saving. An unavailable preset entry requires an explicit replacement. Existing sheets keep their configured rows, efforts, and lane order; the preset is not a runtime fallback. OMP setup writes only the model sheet. It never writes an `instructions` array or credentials into OMP configuration. Adding a role does not require an OMP source change.
 
 ## What is enforced
 

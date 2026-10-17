@@ -9,7 +9,7 @@ Investigate the motivation and intent behind code.
 
 Companion to the `how` skill. `how` answers what the code does and how it works. `why` answers what forces led to its shape.
 
-**Dispatch contract.** Resolve every configured role through [`provider-dispatch.md`](../poteto-mode/references/provider-dispatch.md). Investigators require the parent's live MCP surface, so the default and supported portable route is `inherit-parent` (or its `auto` alias). Pass the code anchor by path. On Codex, resolve remaining Claude tool names via [`codex-tools.md`](../poteto-mode/references/codex-tools.md).
+**Dispatch contract.** Resolve every configured role through [`provider-dispatch.md`](../poteto-mode/references/provider-dispatch.md). The grouped `why investigators, synthesizer` role defaults to `codex:gpt-6-luna@high`. Resolve its actual tool capabilities before dispatch. External lanes have no parent MCP access. The parent must query connected sources and share task-scoped evidence files with source links, queries, and access gaps. `inherit-parent` and `auto` remain explicit choices for live parent MCP access; never silently reroute a qualified model. Pass the code anchor and evidence by path. On Codex, resolve remaining Claude tool names via [`codex-tools.md`](../poteto-mode/references/codex-tools.md).
 
 ## Operating Posture
 
@@ -60,7 +60,7 @@ Capture this as seed context (file paths, symbols, commits, PR numbers, linked t
 
 ### Discovery
 
-Before spawning investigators, list the available MCPs in the Claude Code environment. Use the tool list at the top of the system prompt (every MCP appears as a tool with prefix `mcp__<server>__<name>`). Otherwise read `.mcp.json` in the plugin/project, or run `claude mcp list`.
+Before spawning investigators, list the available MCPs in the parent environment using its tool discovery. On Claude Code, use the tool list, `.mcp.json`, or `claude mcp list`. For an external lane, the parent performs the connected-source searches and writes the relevant results to task-scoped evidence files before dispatch. Record source links, search terms, time ranges, and unavailable sources. Share only task-relevant evidence that the assigned route is authorized to receive.
 
 Map each available MCP to one evidence category:
 
@@ -76,7 +76,7 @@ Source control is always available through git and `gh`. For the other six, clas
 
 Aim for a complete **coverage map**, not a minimal one. Document the null, don't skip the search.
 
-Launch all matching investigators in one fan-out phase so they run concurrently. Don't ask one agent to cover multiple MCPs. Route each through the `why investigators, synthesizer` descriptor (default `inherit-parent`) with the assigned MCP available. Investigators still do not write files; that is a posture even when the MCP-capable execution mode is not mechanically read-only.
+Launch all matching investigators in one fan-out phase so they run concurrently. Don't ask one agent to cover multiple MCPs. Route each through the `why investigators, synthesizer` descriptor (default `codex:gpt-6-luna@high`) with either the assigned MCP available or parent-collected evidence files. State which mode applies. A lane without the tool must analyze the supplied evidence and report missing searches; it must not claim it queried the source. Investigators do not write files.
 
 Each investigator gets:
 1. The base prompt from `references/investigator-prompt.md`
@@ -84,10 +84,11 @@ Each investigator gets:
 3. The cross-cutting `references/sources/incident-postmortem.md` **if the target code looks defensive** (null checks, retry logic, timeout handling, rate limiting, feature flags, egress guards, OOM handlers)
 4. The code anchor from Step 2 (file paths, symbols, commit hashes, PR numbers, ticket IDs)
 5. The user's original question
+6. Evidence file paths, provenance, and a list of available tools and inaccessible sources
 
 ### Investigator roster. One per available evidence category
 
-Spawn one investigator per category that has a matching MCP. Each owns exactly one tool or MCP.
+Spawn one investigator per category that has a matching MCP. Each owns exactly one evidence category, using its assigned tool or parent-collected evidence.
 
 Each entry names the category and the kind of "why" it uniquely surfaces. Use it to know what to expect back, how to name a gap when a category returns empty, and (only in the rare provably-irrelevant case) to justify a skip.
 
@@ -107,16 +108,17 @@ Each entry names the category and the kind of "why" it uniquely surfaces. Use it
 
 ### When to skip an investigator
 
-Only skip with an **explicit, written justification** that goes in the final "Sources Consulted" section. Two valid reasons:
+Only skip with an **explicit, written justification** that goes in the final "Sources Consulted" section. Valid reasons:
 
 - **No MCP is available for that category** in this environment. Flag this as a gap, not a choice. Example: "Real-time team chat skipped. No matching MCP available, so the conversational record was not searchable."
+- **The parent could not collect evidence for a lane without source access.** Report the unavailable source and reason as a coverage gap.
 - **The source is provably irrelevant**, not just "probably irrelevant." A high bar. Example: "Error / exception tracking skipped. Target is a build-time script with no runtime code path."
 
 If your scope assessment suggests a single-commit trivial target where the PR description already contains the complete answer, you may answer inline **only after** confirming all seven available category searches would be redundant. Say so explicitly. This should be rare.
 
 ## Step 4. Synthesize
 
-Dispatch one synthesizer through the `why investigators, synthesizer` descriptor (default `inherit-parent`). Preserve relevant MCP access because the synthesizer's quality check spot-verifies citations. It does not write files.
+Dispatch one synthesizer through the `why investigators, synthesizer` descriptor (default `codex:gpt-6-luna@high`). Give it the same evidence files and provenance for citation checks. If it requests a connected-source check that its route cannot perform, the parent performs that check and shares the result, or reports the verification gap. It does not write files. The grouped key keeps investigators and synthesis on the same model and effort.
 
 The synthesizer gets:
 1. The investigator findings, including any null results and any categories skipped with justification
